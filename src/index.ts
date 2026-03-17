@@ -57,6 +57,12 @@ export {
   type LLMProvider,
   type LLMCompletionRequest,
   type LLMCompletionResponse,
+  type LLMStreamRequest,
+  type LLMStreamEvent,
+  type LLMStreamDeltaEvent,
+  type LLMStreamFinishEvent,
+  type LLMStreamErrorEvent,
+  type LLMChatMessage,
   MockLLMProvider,
 } from './extraction/index.js';
 

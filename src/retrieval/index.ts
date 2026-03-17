@@ -13,6 +13,8 @@ export type {
   RecallQuery,
   RecallResult,
   RecallDiagnostics,
+  RecallTraceHook,
+  RecallTraceEvent,
 } from './dual-path-retriever.js';
 
 // ── Graph traversal from query (entity extraction + seed discovery + BFS) ──

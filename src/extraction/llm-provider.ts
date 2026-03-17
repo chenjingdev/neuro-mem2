@@ -30,6 +30,63 @@ export interface LLMCompletionResponse {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Streaming types for the Visual Debug Chat App
+// ---------------------------------------------------------------------------
+
+/** A streaming request extends the standard completion request with chat history. */
+export interface LLMStreamRequest {
+  /** System prompt */
+  system: string;
+  /** Conversation messages (multi-turn) */
+  messages: LLMChatMessage[];
+  /** Temperature (0.0 = deterministic, 1.0 = creative) */
+  temperature?: number;
+  /** Maximum tokens in response */
+  maxTokens?: number;
+}
+
+/** A single chat message in a conversation. */
+export interface LLMChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Events emitted during LLM streaming.
+ *
+ * - `delta`  : incremental text token from the LLM
+ * - `finish` : stream completed, includes aggregated usage stats
+ * - `error`  : an error occurred during streaming
+ */
+export type LLMStreamEvent =
+  | LLMStreamDeltaEvent
+  | LLMStreamFinishEvent
+  | LLMStreamErrorEvent;
+
+export interface LLMStreamDeltaEvent {
+  type: 'delta';
+  /** Incremental text content */
+  content: string;
+}
+
+export interface LLMStreamFinishEvent {
+  type: 'finish';
+  /** Full accumulated response text */
+  content: string;
+  /** Token usage stats (optional, provider-dependent) */
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+export interface LLMStreamErrorEvent {
+  type: 'error';
+  error: string;
+}
+
 /**
  * Abstract interface for LLM providers.
  * Implementations handle the actual API communication.
@@ -43,6 +100,13 @@ export interface LLMProvider {
    * Implementations should handle retries and error formatting.
    */
   complete(request: LLMCompletionRequest): Promise<LLMCompletionResponse>;
+
+  /**
+   * Stream a chat completion, yielding incremental tokens via an async iterator.
+   * Used by the Visual Debug Chat App for real-time SSE streaming.
+   * Optional — providers that don't support streaming can omit this.
+   */
+  stream?(request: LLMStreamRequest): AsyncIterable<LLMStreamEvent>;
 }
 
 /**

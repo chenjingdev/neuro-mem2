@@ -45,6 +45,10 @@ export {
   toRecallResponse,
 } from './schemas.js';
 
+// Chat API (Visual Debug Chat App)
+export { createChatApi, mountChatApi } from './chat.js';
+export type { ChatApiConfig } from './chat.js';
+
 // OpenAPI
 export {
   generateOpenApiSpec,

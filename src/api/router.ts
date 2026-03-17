@@ -35,6 +35,8 @@ import { honoAuth, type HonoAuthOptions } from './middleware/hono-auth.js';
 import { honoRateLimit } from './middleware/hono-rate-limit.js';
 import { RateLimitStore } from './middleware/rate-limiter.js';
 import type { RateLimitConfig } from './middleware/types.js';
+import { createChatRouter, type ChatRouterDependencies } from '../chat/chat-router.js';
+import { createSessionsRouter } from '../chat/sessions-router.js';
 
 // ─── App Dependencies ────────────────────────────────────
 
@@ -53,6 +55,10 @@ export interface RouterDependencies {
   rateLimit?: false | Partial<RateLimitConfig>;
   /** Rate limit store (shared instance for testing) */
   rateLimitStore?: RateLimitStore;
+  /** Chat router dependencies — when provided, mounts the chat router at /chat */
+  chatDeps?: ChatRouterDependencies;
+  /** Chat debug database handle — when provided, mounts sessions API at /api/sessions */
+  chatDb?: Database.Database;
 }
 
 // ─── Router Factory ──────────────────────────────────────
@@ -172,6 +178,26 @@ export function createRouter(deps: RouterDependencies): Hono {
       return handleError(c, err);
     }
   });
+
+  // ── Mount Chat Router (Visual Debug Chat App) ──
+  // The chat sub-router defines its own /chat and /chat/health routes,
+  // so we mount it at the root path. This keeps the chat endpoints at
+  // /chat and /chat/health on the main app, matching the SSE protocol spec.
+  // Localhost-only debug use — no auth or rate limiting applied.
+  if (deps.chatDeps) {
+    const chatRouter = createChatRouter(deps.chatDeps);
+    app.route('/', chatRouter);
+  }
+
+  // ── Mount Sessions Router (Visual Debug Chat App — session listing & detail) ──
+  // Uses the chatDb handle (or chatDeps.chatDb) to query stored conversations.
+  {
+    const sessionsDb = deps.chatDb ?? deps.chatDeps?.chatDb;
+    if (sessionsDb) {
+      const sessionsRouter = createSessionsRouter({ db: sessionsDb });
+      app.route('/', sessionsRouter);
+    }
+  }
 
   // ── POST /recall — Retrieve relevant memories ──
   app.post('/recall', async (c) => {

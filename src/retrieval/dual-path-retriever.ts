@@ -63,6 +63,42 @@ export const DEFAULT_DUAL_PATH_CONFIG: DualPathRetrieverConfig = {
   pathTimeoutMs: 5000,
 };
 
+// ─── Trace Hook ─────────────────────────────────────────
+
+/**
+ * Callback for external trace collection during recall pipeline execution.
+ *
+ * Each stage of the recall pipeline (vector_search, graph_traversal, merge, reinforce)
+ * invokes this hook with structured data, enabling the Visual Debug Chat App
+ * to stream per-stage diagnostics to the frontend as SSE `event:trace` messages.
+ *
+ * The hook is intentionally decoupled from the TraceCollector in src/chat/
+ * so that the retrieval layer has no dependency on the chat module.
+ */
+export type RecallTraceHook = (event: RecallTraceEvent) => void;
+
+/**
+ * A single recall pipeline trace event emitted by the DualPathRetriever.
+ */
+export interface RecallTraceEvent {
+  /** Pipeline stage name */
+  stage: 'vector_search' | 'graph_traversal' | 'merge' | 'reinforce';
+  /** Lifecycle status */
+  status: 'start' | 'complete' | 'error' | 'skipped';
+  /** Stage input data (on 'start') */
+  input?: unknown;
+  /** Stage output data (on 'complete') */
+  output?: unknown;
+  /** Wall-clock duration in ms (on 'complete' or 'error') */
+  durationMs?: number;
+  /** Error message (on 'error') */
+  error?: string;
+  /** Skip reason (on 'skipped') */
+  skipReason?: string;
+  /** ISO 8601 timestamp */
+  timestamp: string;
+}
+
 // ─── Query Input ─────────────────────────────────────────
 
 export interface RecallQuery {
@@ -70,6 +106,12 @@ export interface RecallQuery {
   queryText: string;
   /** Per-query config overrides */
   config?: Partial<DualPathRetrieverConfig>;
+  /**
+   * Optional trace hook for per-stage instrumentation.
+   * When provided, each recall sub-stage (vector_search, graph_traversal,
+   * merge, reinforce) will emit start/complete/error events with raw data.
+   */
+  traceHook?: RecallTraceHook;
 }
 
 // ─── Recall Result ───────────────────────────────────────
@@ -165,15 +207,121 @@ export class DualPathRetriever {
     const totalStart = performance.now();
     const cfg = { ...this.config, ...query.config };
     const timeoutMs = cfg.pathTimeoutMs ?? 5000;
+    const hook = query.traceHook;
 
     // Rebuild merger if per-query config changes merge parameters
     const merger = this.getMerger(cfg);
 
     // ── Phase 1: Parallel path execution ──
+    // Emit start events for both paths before launching them
+
+    hook?.({
+      stage: 'vector_search',
+      status: 'start',
+      input: {
+        queryText: query.queryText,
+        topK: cfg.vector?.topK ?? 10,
+        similarityThreshold: cfg.vector?.similarityThreshold ?? 0.3,
+        expandToMemoryNodes: cfg.vector?.expandToMemoryNodes ?? true,
+        expansionMaxPerAnchor: cfg.vector?.expansionMaxPerAnchor ?? 5,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    hook?.({
+      stage: 'graph_traversal',
+      status: 'start',
+      input: {
+        queryText: query.queryText,
+        maxHops: cfg.graph?.maxHops ?? 2,
+        minEdgeWeight: cfg.graph?.minEdgeWeight ?? 0.1,
+        maxResults: cfg.graph?.maxResults ?? 20,
+        hopDecay: cfg.graph?.hopDecay ?? 0.7,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    const vectorStart = performance.now();
+    const graphStart = performance.now();
 
     const [vectorTimed, graphTimed] = await Promise.all([
-      this.withTimeout(this.executeVectorPath(query.queryText, cfg), timeoutMs),
-      this.withTimeout(this.executeGraphPath(query.queryText, cfg), timeoutMs),
+      this.withTimeout(this.executeVectorPath(query.queryText, cfg), timeoutMs)
+        .then((result) => {
+          const duration = round2(performance.now() - vectorStart);
+          if (result.timedOut) {
+            hook?.({
+              stage: 'vector_search',
+              status: 'error',
+              error: 'Timed out',
+              durationMs: duration,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            hook?.({
+              stage: 'vector_search',
+              status: 'complete',
+              durationMs: duration,
+              output: {
+                matchedAnchors: result.value!.matchedAnchors,
+                itemCount: result.value!.items.length,
+                timedOut: false,
+                items: result.value!.items.slice(0, 10).map(summarizeItem),
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+          return result;
+        })
+        .catch((err) => {
+          const duration = round2(performance.now() - vectorStart);
+          hook?.({
+            stage: 'vector_search',
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+            durationMs: duration,
+            timestamp: new Date().toISOString(),
+          });
+          return { value: null, timedOut: false } as { value: null; timedOut: boolean };
+        }),
+      this.withTimeout(this.executeGraphPath(query.queryText, cfg), timeoutMs)
+        .then((result) => {
+          const duration = round2(performance.now() - graphStart);
+          if (result.timedOut) {
+            hook?.({
+              stage: 'graph_traversal',
+              status: 'error',
+              error: 'Timed out',
+              durationMs: duration,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            hook?.({
+              stage: 'graph_traversal',
+              status: 'complete',
+              durationMs: duration,
+              output: {
+                extractedEntities: result.value!.extractedEntities,
+                seedCount: result.value!.seedCount,
+                itemCount: result.value!.items.length,
+                timedOut: false,
+                items: result.value!.items.slice(0, 10).map(summarizeItem),
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+          return result;
+        })
+        .catch((err) => {
+          const duration = round2(performance.now() - graphStart);
+          hook?.({
+            stage: 'graph_traversal',
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+            durationMs: duration,
+            timestamp: new Date().toISOString(),
+          });
+          return { value: null, timedOut: false } as { value: null; timedOut: boolean };
+        }),
     ]);
 
     const vectorOut = vectorTimed.timedOut ? null : vectorTimed.value;
@@ -184,7 +332,46 @@ export class DualPathRetriever {
 
     // ── Phase 2: Merge via ResultMerger ──
 
+    const mergeStart = performance.now();
+    hook?.({
+      stage: 'merge',
+      status: 'start',
+      input: {
+        vectorItemCount: vectorItems.length,
+        graphItemCount: graphItems.length,
+        vectorWeight: cfg.vectorWeight ?? 0.5,
+        convergenceBonus: cfg.convergenceBonus ?? 0.1,
+        minScore: cfg.minScore ?? 0.05,
+        maxResults: cfg.maxResults ?? 20,
+        normalization: cfg.normalization ?? 'minmax',
+      },
+      timestamp: new Date().toISOString(),
+    });
+
     const mergeResult: MergeResult = merger.merge(vectorItems, graphItems);
+    const mergeDuration = round2(performance.now() - mergeStart);
+
+    hook?.({
+      stage: 'merge',
+      status: 'complete',
+      durationMs: mergeDuration,
+      output: {
+        mergedItemCount: mergeResult.items.length,
+        overlapCount: mergeResult.stats.overlapCount,
+        filteredCount: mergeResult.stats.filteredCount,
+        outputCount: mergeResult.stats.outputCount,
+        mergeTimeMs: mergeResult.stats.mergeTimeMs,
+        items: mergeResult.items.slice(0, 10).map(item => ({
+          nodeId: item.nodeId,
+          nodeType: item.nodeType,
+          score: item.score,
+          sources: item.sources,
+          sourceScores: item.sourceScores,
+          contentPreview: item.content.slice(0, 120),
+        })),
+      },
+      timestamp: new Date().toISOString(),
+    });
 
     // ── Phase 3: Hebbian reinforcement ──
 
@@ -192,6 +379,18 @@ export class DualPathRetriever {
     const anchorIds = (vectorOut?.matchedAnchors ?? []).map(a => a.anchorId);
 
     if ((cfg.reinforceOnRetrieval ?? true) && mergeResult.items.length > 0 && anchorIds.length > 0) {
+      const reinforceStart = performance.now();
+      hook?.({
+        stage: 'reinforce',
+        status: 'start',
+        input: {
+          anchorIds,
+          resultCount: mergeResult.items.length,
+          learningRate: cfg.reinforcementRate ?? 0.05,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
       edgesReinforced = this.reinforceEdges(
         anchorIds,
         mergeResult.items,
@@ -202,6 +401,26 @@ export class DualPathRetriever {
       for (const anchorId of anchorIds) {
         this.anchorRepo.recordActivation(anchorId);
       }
+
+      const reinforceDuration = round2(performance.now() - reinforceStart);
+      hook?.({
+        stage: 'reinforce',
+        status: 'complete',
+        durationMs: reinforceDuration,
+        output: { edgesReinforced },
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      hook?.({
+        stage: 'reinforce',
+        status: 'skipped',
+        skipReason: mergeResult.items.length === 0
+          ? 'No merged items'
+          : anchorIds.length === 0
+            ? 'No activated anchors'
+            : 'Reinforcement disabled',
+        timestamp: new Date().toISOString(),
+      });
     }
 
     const totalTimeMs = round2(performance.now() - totalStart);
@@ -378,8 +597,31 @@ export class DualPathRetriever {
 
 // ─── Pure helpers ────────────────────────────────────────
 
+/** No-op function for when no trace hook is provided. */
+function noop(_event: RecallTraceEvent): void { /* intentionally empty */ }
+
 function round2(ms: number): number {
   return Math.round(ms * 100) / 100;
+}
+
+/**
+ * Create a compact summary of a ScoredMemoryItem for trace output.
+ * Truncates content to avoid oversized SSE payloads.
+ */
+function summarizeItem(item: ScoredMemoryItem): {
+  nodeId: string;
+  nodeType: string;
+  score: number;
+  source: string;
+  contentPreview: string;
+} {
+  return {
+    nodeId: item.nodeId,
+    nodeType: item.nodeType,
+    score: item.score,
+    source: item.source,
+    contentPreview: item.content.slice(0, 120),
+  };
 }
 
 /**

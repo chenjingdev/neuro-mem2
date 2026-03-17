@@ -78,7 +78,8 @@ export class FactExtractor {
         },
       }));
 
-      return { facts, ok: true };
+      // Always include rawResponse for debugging visibility
+      return { facts, ok: true, rawResponse: response.content };
     } catch (err) {
       return {
         facts: [],
