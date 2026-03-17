@@ -26,8 +26,10 @@ import { AnthropicLLMProvider } from './extraction/anthropic-llm-provider.js';
 import { MockLLMProvider } from './extraction/llm-provider.js';
 import type { LLMProvider } from './extraction/llm-provider.js';
 import { FactExtractor } from './extraction/fact-extractor.js';
+import { FactRepository } from './db/fact-repo.js';
 import { DualPathRetriever } from './retrieval/dual-path-retriever.js';
 import { MockEmbeddingProvider } from './retrieval/embedding-provider.js';
+import { TurnExtractionPipeline } from './services/turn-extraction-pipeline.js';
 
 const port = parseInt(process.env['PORT'] ?? '3030', 10);
 const dbPath = process.env['DB_PATH'] ?? './nero.db';
@@ -74,8 +76,15 @@ if (auth) {
   llmProvider = new MockLLMProvider();
 }
 
-// ── Fact Extractor (uses LLM for extraction, no separate embedding API) ──
+// ── Fact Extractor & Repository ──
 const factExtractor = new FactExtractor(llmProvider);
+const factRepo = new FactRepository(db);
+
+// ── Turn Extraction Pipeline (auto-saves facts on turn.completed events) ──
+const turnPipeline = new TurnExtractionPipeline(
+  eventBus, factExtractor, factRepo, conversationRepo,
+);
+turnPipeline.start();
 
 // ── Retriever (hash-based embedding — no external embedding API) ──
 const embeddingProvider = new MockEmbeddingProvider(256);

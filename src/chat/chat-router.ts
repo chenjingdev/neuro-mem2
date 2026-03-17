@@ -315,6 +315,7 @@ export interface ChatRouterDependencies {
  */
 class SSEWriter {
   private encoder = new TextEncoder();
+  private closed = false;
 
   constructor(
     private controller: ReadableStreamDefaultController<Uint8Array>,
@@ -323,7 +324,12 @@ class SSEWriter {
 
   /** Write a typed SSE event. */
   writeEvent(event: string, data: unknown): void {
-    this.controller.enqueue(this.encoder.encode(formatSSE(event, data)));
+    if (this.closed) return;
+    try {
+      this.controller.enqueue(this.encoder.encode(formatSSE(event, data)));
+    } catch {
+      this.closed = true;
+    }
   }
 
   /**
@@ -345,17 +351,25 @@ class SSEWriter {
    * for client-side timeline rendering) and close the stream.
    */
   done(fullResponse: string, totalDurationMs: number): void {
+    if (this.closed) return;
     const doneEvent: DoneEvent = {
       fullResponse,
       totalDurationMs,
       traceEvents: this.collector.getAll(),
     };
     this.writeEvent('done', doneEvent);
-    this.controller.close();
+    this.closed = true;
+    try {
+      this.controller.close();
+    } catch {
+      // Stream may already be closed
+    }
   }
 
   /** Close the stream (error path). */
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     try {
       this.controller.close();
     } catch {
