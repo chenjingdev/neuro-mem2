@@ -58,7 +58,7 @@ export class AnthropicLLMProvider implements LLMProvider {
 
   async complete(request: LLMCompletionRequest): Promise<LLMCompletionResponse> {
     const body = {
-      model: this.model,
+      model: request.model ?? this.model,
       max_tokens: request.maxTokens ?? this.defaultMaxTokens,
       temperature: request.temperature ?? 0.0,
       system: request.system,
@@ -99,7 +99,7 @@ export class AnthropicLLMProvider implements LLMProvider {
 
   async *stream(request: LLMStreamRequest): AsyncIterable<LLMStreamEvent> {
     const body = {
-      model: this.model,
+      model: request.model ?? this.model,
       max_tokens: request.maxTokens ?? this.defaultMaxTokens,
       temperature: request.temperature ?? 0.0,
       stream: true,

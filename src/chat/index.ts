@@ -14,7 +14,12 @@ export {
   getApiKeyForProvider,
   AUTH_SEARCH_PATHS,
 } from './auth-loader.js';
-export type { AuthFileContent, AuthCredentials } from './auth-loader.js';
+export type {
+  AuthFileContent,
+  AuthCredentials,
+  CodexOAuthCredentials,
+  CodexInstalledAuthTokens,
+} from './auth-loader.js';
 
 // ─── SSE Helpers ──────────────────────────────────────────
 export {

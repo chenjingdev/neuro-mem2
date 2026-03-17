@@ -1379,6 +1379,12 @@ body {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  min-width: 0;
+  transition: width 0.18s ease;
+}
+
+.chat-page-timeline.timeline-with-detail {
+  width: clamp(640px, 42vw, 880px);
 }
 
 /* ─── Session Tabs ─────────────────────────────────────────── */
@@ -1987,6 +1993,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 12px;
   padding: 4px 8px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.02);
@@ -2006,6 +2013,9 @@ body {
   font-size: 12px;
   color: var(--text);
   text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dp-mono {
@@ -2142,14 +2152,14 @@ body {
 
 .dp-json-line {
   padding: 1px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dp-json-toggle {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 2px;
   background: none;
   border: none;
@@ -2312,10 +2322,11 @@ body {
 
 /* Wrapper for timeline + detail split inside the timeline column */
 .timeline-detail-wrapper {
-  display: flex;
+  display: grid;
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .timeline-detail-wrapper .timeline-panel {
@@ -2325,14 +2336,32 @@ body {
 
 /* When detail panel is open, limit timeline to make room */
 .timeline-detail-wrapper.has-detail .timeline-panel {
-  flex: 1;
-  min-width: 160px;
+  min-width: 240px;
 }
 
 /* The detail panel inside the wrapper */
 .timeline-detail-wrapper .detail-panel {
-  width: 320px;
+  width: 0;
+  min-width: 0;
   flex-shrink: 0;
+}
+
+.timeline-detail-wrapper.has-detail {
+  grid-template-columns: minmax(240px, 1fr) minmax(320px, 420px);
+}
+
+.timeline-detail-wrapper.has-detail .detail-panel {
+  width: auto;
+}
+
+@media (max-width: 1280px) {
+  .chat-page-timeline.timeline-with-detail {
+    width: clamp(520px, 46vw, 720px);
+  }
+
+  .timeline-detail-wrapper.has-detail {
+    grid-template-columns: minmax(180px, 1fr) minmax(280px, 360px);
+  }
 }
 
 /* ─── Stage row selection (tl-selected class from TimelinePanel) ─── */

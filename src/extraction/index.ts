@@ -35,6 +35,10 @@ export { parseEpisodeResponse, type EpisodeParseResult } from './episode-parser.
 
 // OpenAI LLM provider (streaming-capable)
 export { OpenAILLMProvider, type OpenAIProviderConfig } from './openai-llm-provider.js';
+export {
+  OpenAICodexLLMProvider,
+  type OpenAICodexProviderConfig,
+} from './openai-codex-llm-provider.js';
 
 // Anthropic LLM provider (streaming-capable)
 export { AnthropicLLMProvider, type AnthropicProviderConfig } from './anthropic-llm-provider.js';

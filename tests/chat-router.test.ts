@@ -23,6 +23,7 @@ import type {
   LLMStreamRequest,
   LLMStreamEvent,
 } from '../src/extraction/llm-provider.js';
+import { openChatDatabase } from '../src/chat/db/connection.js';
 import type { RecallResult, RecallQuery } from '../src/retrieval/dual-path-retriever.js';
 
 // ─── Mock LLM Provider with streaming ─────────────────────
@@ -724,6 +725,33 @@ describe('POST /chat — event ordering', () => {
     const events = parseSSEEvents(text);
 
     expect(events[events.length - 1]!.event).toBe('done');
+  });
+});
+
+describe('POST /chat — persistence', () => {
+  it('persists SSE trace events into chat_trace_events with monotonic trace ids', async () => {
+    const chatDb = openChatDatabase({ inMemory: true });
+
+    try {
+      const response = await postChat(
+        { message: 'persist this trace' },
+        makeDeps({ chatDb }),
+      );
+
+      expect(response.status).toBe(200);
+      await response.text();
+
+      const traceIds = chatDb
+        .prepare('SELECT trace_id FROM chat_trace_events ORDER BY trace_id ASC')
+        .all() as Array<{ trace_id: number }>;
+
+      expect(traceIds.length).toBeGreaterThan(0);
+      expect(traceIds.map((row) => row.trace_id)).toEqual(
+        Array.from({ length: traceIds.length }, (_, i) => i + 1),
+      );
+    } finally {
+      chatDb.close();
+    }
   });
 });
 

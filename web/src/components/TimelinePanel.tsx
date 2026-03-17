@@ -13,7 +13,6 @@ import {
   getStageOrder,
   formatDuration,
 } from '../types/timeline';
-import { DetailPanel } from './DetailPanel';
 
 // Re-export StageEntry so useTimeline and other consumers can import from here
 export type { StageEntry } from '../types/timeline';
@@ -334,12 +333,6 @@ export function TimelinePanel({ traces, selectedStep: externalSelectedStep, onSe
     return pipelineStage?.durationMs;
   }, [stages]);
 
-  // Find the selected stage entry for detail display
-  const selectedStageEntry = useMemo(
-    () => (selectedStep ? stages.find((s) => s.stage === selectedStep) ?? null : null),
-    [stages, selectedStep],
-  );
-
   if (traces.length === 0) {
     return (
       <div className="timeline-panel">
@@ -421,14 +414,6 @@ export function TimelinePanel({ traces, selectedStep: externalSelectedStep, onSe
           </div>
         ))}
       </div>
-
-      {/* ─── Detail Panel for selected step ─── */}
-      {selectedStageEntry && (
-        <DetailPanel
-          entry={selectedStageEntry}
-          onClose={() => handleSelectStep(selectedStageEntry.stage)}
-        />
-      )}
     </div>
   );
 }

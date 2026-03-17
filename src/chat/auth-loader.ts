@@ -30,6 +30,20 @@ import path from 'node:path';
 
 // ─── Types ───────────────────────────────────────────────
 
+export interface CodexOAuthCredentials {
+  access: string;
+  refresh: string;
+  expires: number;
+  accountId?: string;
+}
+
+export interface CodexInstalledAuthTokens {
+  access_token?: string;
+  refresh_token?: string;
+  id_token?: string;
+  account_id?: string;
+}
+
 /** Raw shape of the auth.json file. All fields are optional. */
 export interface AuthFileContent {
   /** OpenAI API key (sk-...) */
@@ -48,6 +62,12 @@ export interface AuthFileContent {
     refresh_token?: string;
     expires_at?: string;
   };
+  /** Codex CLI installed auth.json shape */
+  auth_mode?: string;
+  last_refresh?: string;
+  tokens?: CodexInstalledAuthTokens;
+  /** codex-login style auth store entry for openai-codex */
+  openaiCodexOAuth?: CodexOAuthCredentials;
 }
 
 /** Resolved credentials ready for use by LLM providers. */
@@ -58,6 +78,8 @@ export interface AuthCredentials {
   anthropicApiKey?: string;
   /** Default provider preference */
   defaultProvider?: 'openai' | 'anthropic';
+  /** OpenAI Codex OAuth credentials for pi-ai based chat */
+  codexOAuth?: CodexOAuthCredentials;
   /** Path from which credentials were loaded */
   sourcePath: string;
 }
@@ -73,6 +95,35 @@ export const AUTH_SEARCH_PATHS: readonly string[] = [
   path.join(HOME_DIR, '.codex', 'auth.json'),
   path.join(process.cwd(), 'auth.json'),
 ];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseJwtExpiryMs(token: string): number | undefined {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) return undefined;
+
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as {
+      exp?: unknown;
+    };
+
+    if (typeof parsed.exp === 'number' && Number.isFinite(parsed.exp)) {
+      return parsed.exp * 1000;
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseIsoTimestampMs(value?: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 // ─── Core Functions ──────────────────────────────────────
 
@@ -122,7 +173,7 @@ export function parseAuthFile(filePath: string): AuthFileContent {
     );
   }
 
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     throw new Error(`Auth file must be a JSON object: ${filePath}`);
   }
 
@@ -145,14 +196,63 @@ export function parseAuthFile(filePath: string): AuthFileContent {
   if (typeof obj['api_key'] === 'string' && obj['api_key']) {
     result.api_key = obj['api_key'];
   }
+  if (typeof obj['auth_mode'] === 'string' && obj['auth_mode']) {
+    result.auth_mode = obj['auth_mode'];
+  }
+  if (typeof obj['last_refresh'] === 'string' && obj['last_refresh']) {
+    result.last_refresh = obj['last_refresh'];
+  }
+  if (typeof obj['OPENAI_API_KEY'] === 'string' && obj['OPENAI_API_KEY']) {
+    result.openai_api_key = obj['OPENAI_API_KEY'];
+  }
 
   // Extract nested codex object
-  if (typeof obj['codex'] === 'object' && obj['codex'] !== null && !Array.isArray(obj['codex'])) {
+  if (isRecord(obj['codex'])) {
     const codex = obj['codex'] as Record<string, unknown>;
     result.codex = {};
     if (typeof codex['token'] === 'string') result.codex.token = codex['token'];
     if (typeof codex['refresh_token'] === 'string') result.codex.refresh_token = codex['refresh_token'];
     if (typeof codex['expires_at'] === 'string') result.codex.expires_at = codex['expires_at'];
+  }
+
+  // Extract Codex CLI local auth shape (~/.codex/auth.json)
+  if (isRecord(obj['tokens'])) {
+    const tokens = obj['tokens'];
+    result.tokens = {};
+    if (typeof tokens['access_token'] === 'string' && tokens['access_token']) {
+      result.tokens.access_token = tokens['access_token'];
+    }
+    if (typeof tokens['refresh_token'] === 'string' && tokens['refresh_token']) {
+      result.tokens.refresh_token = tokens['refresh_token'];
+    }
+    if (typeof tokens['id_token'] === 'string' && tokens['id_token']) {
+      result.tokens.id_token = tokens['id_token'];
+    }
+    if (typeof tokens['account_id'] === 'string' && tokens['account_id']) {
+      result.tokens.account_id = tokens['account_id'];
+    }
+  }
+
+  // Extract codex-login style auth store entry
+  if (isRecord(obj['openai-codex'])) {
+    const codexEntry = obj['openai-codex'];
+    const access = typeof codexEntry['access'] === 'string' ? codexEntry['access'] : undefined;
+    const refresh = typeof codexEntry['refresh'] === 'string' ? codexEntry['refresh'] : undefined;
+    const expires =
+      typeof codexEntry['expires'] === 'number' && Number.isFinite(codexEntry['expires'])
+        ? codexEntry['expires']
+        : undefined;
+
+    if (access && refresh && expires !== undefined) {
+      result.openaiCodexOAuth = {
+        access,
+        refresh,
+        expires,
+        ...(typeof codexEntry['accountId'] === 'string' && codexEntry['accountId']
+          ? { accountId: codexEntry['accountId'] }
+          : {}),
+      };
+    }
   }
 
   return result;
@@ -180,6 +280,25 @@ export function resolveCredentials(
   if (content.anthropic_api_key) {
     creds.anthropicApiKey = content.anthropic_api_key;
   }
+  if (content.openaiCodexOAuth) {
+    creds.codexOAuth = content.openaiCodexOAuth;
+  }
+
+  if (!creds.codexOAuth && content.tokens?.access_token && content.tokens?.refresh_token) {
+    const fallbackRefreshMs = parseIsoTimestampMs(content.last_refresh);
+    const expires =
+      parseJwtExpiryMs(content.tokens.access_token) ??
+      (fallbackRefreshMs !== undefined ? fallbackRefreshMs + 60 * 60 * 1000 : undefined);
+
+    if (expires !== undefined) {
+      creds.codexOAuth = {
+        access: content.tokens.access_token,
+        refresh: content.tokens.refresh_token,
+        expires,
+        ...(content.tokens.account_id ? { accountId: content.tokens.account_id } : {}),
+      };
+    }
+  }
 
   // Fallback: generic api_key or oauth_token
   const genericKey = content.api_key || content.oauth_token || content.codex?.token;
@@ -192,6 +311,8 @@ export function resolveCredentials(
     creds.defaultProvider = 'openai';
   } else if (creds.anthropicApiKey && !creds.openaiApiKey) {
     creds.defaultProvider = 'anthropic';
+  } else if (creds.codexOAuth) {
+    creds.defaultProvider = 'openai';
   }
 
   // Apply generic key to the appropriate provider if specific key is missing
@@ -242,6 +363,7 @@ export function loadAuthCredentials(
   const loaded: string[] = [];
   if (credentials.openaiApiKey) loaded.push('openai');
   if (credentials.anthropicApiKey) loaded.push('anthropic');
+  if (credentials.codexOAuth) loaded.push('openai-codex');
   console.info(
     `[auth-loader] Loaded credentials for: ${loaded.length > 0 ? loaded.join(', ') : '(none)'}`,
     credentials.defaultProvider ? `(default: ${credentials.defaultProvider})` : '',

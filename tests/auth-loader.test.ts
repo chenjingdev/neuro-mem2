@@ -102,6 +102,46 @@ describe('parseAuthFile', () => {
     expect(result.codex?.expires_at).toBe('2026-12-31T00:00:00Z');
   });
 
+  it('parses installed Codex auth.json tokens', () => {
+    const p = writeTmpAuth('auth.json', {
+      auth_mode: 'chatgpt',
+      last_refresh: '2026-03-11T04:51:48.731097Z',
+      tokens: {
+        access_token: 'header.eyJleHAiOjE4MDAwMDAwMDB9.signature',
+        refresh_token: 'refresh-token',
+        id_token: 'id-token',
+        account_id: 'account-123',
+      },
+    });
+
+    const result = parseAuthFile(p);
+    expect(result.auth_mode).toBe('chatgpt');
+    expect(result.last_refresh).toBe('2026-03-11T04:51:48.731097Z');
+    expect(result.tokens?.access_token).toBe('header.eyJleHAiOjE4MDAwMDAwMDB9.signature');
+    expect(result.tokens?.refresh_token).toBe('refresh-token');
+    expect(result.tokens?.account_id).toBe('account-123');
+  });
+
+  it('parses codex-login style oauth store entry', () => {
+    const p = writeTmpAuth('auth.json', {
+      'openai-codex': {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: 1800000000000,
+        accountId: 'account-xyz',
+      },
+    });
+
+    const result = parseAuthFile(p);
+    expect(result.openaiCodexOAuth).toEqual({
+      access: 'access-token',
+      refresh: 'refresh-token',
+      expires: 1800000000000,
+      accountId: 'account-xyz',
+    });
+  });
+
   it('handles minimal auth.json (empty object)', () => {
     const p = writeTmpAuth('auth.json', {});
     const result = parseAuthFile(p);
@@ -219,10 +259,58 @@ describe('resolveCredentials', () => {
     expect(creds.openaiApiKey).toBe('specific');
   });
 
+  it('normalizes codex-login oauth credentials', () => {
+    const creds = resolveCredentials(
+      {
+        openaiCodexOAuth: {
+          access: 'access-token',
+          refresh: 'refresh-token',
+          expires: 1800000000000,
+          accountId: 'account-xyz',
+        },
+      },
+      src,
+    );
+
+    expect(creds.codexOAuth).toEqual({
+      access: 'access-token',
+      refresh: 'refresh-token',
+      expires: 1800000000000,
+      accountId: 'account-xyz',
+    });
+    expect(creds.defaultProvider).toBe('openai');
+  });
+
+  it('normalizes installed codex auth tokens using JWT expiry', () => {
+    const payload = Buffer.from(JSON.stringify({ exp: 1800000000 })).toString('base64url');
+    const accessToken = `header.${payload}.signature`;
+
+    const creds = resolveCredentials(
+      {
+        auth_mode: 'chatgpt',
+        tokens: {
+          access_token: accessToken,
+          refresh_token: 'refresh-token',
+          account_id: 'account-abc',
+        },
+      },
+      src,
+    );
+
+    expect(creds.codexOAuth).toEqual({
+      access: accessToken,
+      refresh: 'refresh-token',
+      expires: 1800000000000,
+      accountId: 'account-abc',
+    });
+    expect(creds.defaultProvider).toBe('openai');
+  });
+
   it('handles empty content gracefully', () => {
     const creds = resolveCredentials({}, src);
     expect(creds.openaiApiKey).toBeUndefined();
     expect(creds.anthropicApiKey).toBeUndefined();
+    expect(creds.codexOAuth).toBeUndefined();
     expect(creds.defaultProvider).toBeUndefined();
     expect(creds.sourcePath).toBe(src);
   });

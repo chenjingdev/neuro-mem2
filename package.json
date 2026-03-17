@@ -8,11 +8,13 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "dev": "npx tsx src/cli.ts",
+    "dev": "node scripts/dev-all.mjs",
+    "dev:server": "npx tsx src/cli.ts",
+    "dev:web": "npm --prefix web run dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "web:dev": "cd web && npm run dev",
-    "web:build": "cd web && npm run build"
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build"
   },
   "keywords": [
     "ai",
@@ -23,6 +25,7 @@
   "license": "ISC",
   "dependencies": {
     "@hono/node-server": "^1.19.11",
+    "@mariozechner/pi-ai": "^0.58.4",
     "better-sqlite3": "^12.8.0",
     "hono": "^4.12.8",
     "typescript": "^5.9.3",

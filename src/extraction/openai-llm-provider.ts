@@ -120,6 +120,7 @@ export class OpenAILLMProvider implements LLMProvider {
 
   async complete(request: LLMCompletionRequest): Promise<LLMCompletionResponse> {
     const apiKey = await this.resolveApiKey();
+    const model = request.model ?? this.model;
 
     const messages: Array<{ role: string; content: string }> = [
       { role: 'system', content: request.system },
@@ -127,7 +128,7 @@ export class OpenAILLMProvider implements LLMProvider {
     ];
 
     const body: Record<string, unknown> = {
-      model: this.model,
+      model,
       messages,
       temperature: request.temperature ?? 0.0,
       stream: false,
@@ -176,6 +177,7 @@ export class OpenAILLMProvider implements LLMProvider {
 
   async *stream(request: LLMStreamRequest): AsyncIterable<LLMStreamEvent> {
     const apiKey = await this.resolveApiKey();
+    const model = request.model ?? this.model;
 
     const messages: Array<{ role: string; content: string }> = [
       { role: 'system', content: request.system },
@@ -183,7 +185,7 @@ export class OpenAILLMProvider implements LLMProvider {
     ];
 
     const body: Record<string, unknown> = {
-      model: this.model,
+      model,
       messages,
       temperature: request.temperature ?? 0.7,
       stream: true,

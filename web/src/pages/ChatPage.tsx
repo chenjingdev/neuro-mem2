@@ -343,7 +343,7 @@ export function ChatPage({ options }: ChatPageProps) {
         </div>
 
         {/* Right panel: Timeline */}
-        <div className="chat-page-timeline">
+        <div className={`chat-page-timeline ${selectedStageEntry ? 'timeline-with-detail' : ''}`}>
           {/* Session selector tabs (when multiple live sessions exist) */}
           {!isReadOnly && sessionList.length > 1 && (
             <div className="session-tabs">

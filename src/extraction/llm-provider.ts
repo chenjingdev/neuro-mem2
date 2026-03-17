@@ -11,6 +11,10 @@ export interface LLMCompletionRequest {
   system: string;
   /** User prompt */
   prompt: string;
+  /** Optional model override */
+  model?: string;
+  /** Optional session id for providers with session-aware routing or caching */
+  sessionId?: string;
   /** Expected response format */
   responseFormat?: 'json' | 'text';
   /** Temperature (0.0 = deterministic, 1.0 = creative) */
@@ -40,6 +44,10 @@ export interface LLMStreamRequest {
   system: string;
   /** Conversation messages (multi-turn) */
   messages: LLMChatMessage[];
+  /** Optional model override */
+  model?: string;
+  /** Optional session id for providers with session-aware routing or caching */
+  sessionId?: string;
   /** Temperature (0.0 = deterministic, 1.0 = creative) */
   temperature?: number;
   /** Maximum tokens in response */

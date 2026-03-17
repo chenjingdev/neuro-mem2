@@ -54,7 +54,7 @@ import {
   saveChatTurn,
   type SaveChatTurnResult,
 } from './db/conversationRepo.js';
-import { saveTraceEvents } from './db/traceRepo.js';
+import { savePipelineTraceEvents } from './db/traceRepo.js';
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -531,6 +531,8 @@ async function executePipeline(
   const streamRequest: LLMStreamRequest = {
     system: effectiveSystemPrompt,
     messages,
+    model: request.model,
+    sessionId: request.sessionId,
     temperature: request.temperature ?? 0.7,
     maxTokens: request.maxTokens,
   };
@@ -570,6 +572,8 @@ async function executePipeline(
       const result = await deps.llmProvider.complete({
         system: effectiveSystemPrompt,
         prompt: request.message,
+        model: request.model,
+        sessionId: request.sessionId,
         temperature: request.temperature ?? 0.7,
         maxTokens: request.maxTokens,
       });
@@ -923,11 +927,11 @@ export function createChatRouter(deps: ChatRouterDependencies): Hono {
                 // Persist trace events for the assistant message
                 const traceEvents = collector.getAll();
                 if (traceEvents.length > 0) {
-                  saveTraceEvents(
+                  savePipelineTraceEvents(
                     chatDb,
                     conversation.id,
                     turnResult.assistantMessageId,
-                    traceEvents as any, // TraceEvent shapes are compatible
+                    traceEvents,
                   );
                 }
               } catch (dbErr) {

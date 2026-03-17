@@ -44,6 +44,7 @@ User ↔ LLM API
 git clone https://github.com/chenjingdev/neuro-mem2.git
 cd neuro-mem2
 npm install
+npm --prefix web install
 npm run build
 ```
 
@@ -67,7 +68,9 @@ npm run build
 
 **1단계: 인증 설정**
 
-`~/.nero-mem/auth.json` 또는 `~/.codex/auth.json`에 API 키를 설정합니다:
+기본적으로 `~/.codex/auth.json`이 있으면 로컬에 설치된 Codex 토큰을 자동으로 사용합니다. 별도 로그인 UI는 필요 없습니다.
+
+직접 API 키를 쓰고 싶다면 `~/.nero-mem/auth.json` 또는 `auth.json`에 아래 형식으로 설정할 수 있습니다:
 
 ```json
 {
@@ -82,26 +85,22 @@ npm run build
 export NERO_AUTH_PATH=./auth.json
 ```
 
-**2단계: 백엔드 서버 실행**
+**2단계: 전체 개발 서버 실행**
 
 ```bash
-# 개발 모드 (tsx, 빌드 불필요)
+# 백엔드 + 프론트엔드 동시 실행
 npm run dev
 
-# 또는 프로덕션 모드
+# 또는 개별 실행
+npm run dev:server
+npm run dev:web
+
+# 또는 프로덕션 백엔드 실행
 npm run build
 npm start
 ```
 
-**3단계: 프론트엔드 실행**
-
-```bash
-cd web
-npm install
-npm run dev         # http://localhost:5173
-```
-
-브라우저에서 `http://localhost:5173`을 열면 채팅앱이 실행됩니다.
+브라우저에서 `http://localhost:5173`을 열면 채팅앱이 실행됩니다. 백엔드는 `http://127.0.0.1:3030`에서 함께 뜹니다.
 
 **기능:**
 - 채팅 메시지 송수신 (SSE 스트리밍)

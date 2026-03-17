@@ -19,8 +19,9 @@ import { IngestService } from './services/ingest.js';
 import { EventBus } from './events/event-bus.js';
 import { startServer } from './api/server.js';
 import { loadAuthCredentials } from './chat/auth-loader.js';
-import { initChatDb } from './chat/db/connection.js';
+import { openChatDatabase } from './chat/db/connection.js';
 import { OpenAILLMProvider } from './extraction/openai-llm-provider.js';
+import { OpenAICodexLLMProvider } from './extraction/openai-codex-llm-provider.js';
 import { AnthropicLLMProvider } from './extraction/anthropic-llm-provider.js';
 import { MockLLMProvider } from './extraction/llm-provider.js';
 import type { LLMProvider } from './extraction/llm-provider.js';
@@ -29,7 +30,7 @@ const port = parseInt(process.env['PORT'] ?? '3030', 10);
 const dbPath = process.env['DB_PATH'] ?? './nero.db';
 
 // ── Database ──
-const db = createDatabase({ path: dbPath });
+const db = createDatabase({ dbPath });
 const conversationRepo = new ConversationRepository(db);
 
 // ── Event Bus ──
@@ -39,20 +40,26 @@ const eventBus = new EventBus();
 const ingestService = new IngestService(conversationRepo, eventBus);
 
 // ── Chat DB (separate SQLite for debug chat data) ──
-const chatDb = initChatDb();
+const chatDb = openChatDatabase();
 
 // ── Auth & LLM Provider ──
 const auth = loadAuthCredentials();
 let llmProvider: LLMProvider;
 
 if (auth) {
-  const provider = auth.defaultProvider ?? 'openai';
   console.log(`[nero-mem2] Auth loaded from: ${auth.sourcePath}`);
-  console.log(`[nero-mem2] Provider: ${provider}`);
 
-  if (provider === 'anthropic' && auth.anthropicApiKey) {
+  if (auth.codexOAuth) {
+    console.log('[nero-mem2] Provider: openai-codex (local Codex token)');
+    llmProvider = new OpenAICodexLLMProvider({
+      authJsonPath: auth.sourcePath,
+      credentials: auth.codexOAuth,
+    });
+  } else if (auth.defaultProvider === 'anthropic' && auth.anthropicApiKey) {
+    console.log('[nero-mem2] Provider: anthropic');
     llmProvider = new AnthropicLLMProvider({ apiKey: auth.anthropicApiKey });
   } else if (auth.openaiApiKey) {
+    console.log('[nero-mem2] Provider: openai');
     llmProvider = new OpenAILLMProvider({ apiKey: auth.openaiApiKey });
   } else {
     console.log('[nero-mem2] Auth found but no usable API key — using mock LLM provider');
@@ -95,6 +102,12 @@ console.log('  GET  /api/sessions      List chat sessions');
 console.log('  GET  /api/conversations List conversations');
 console.log('  GET  /health            Health check');
 console.log('');
-console.log('  Debug Chat UI:');
-console.log('    cd web && npm install && npm run dev');
-console.log('    → http://localhost:5173');
+console.log('  Full stack dev:');
+console.log('    npm run dev');
+console.log('    → frontend: http://localhost:5173');
+console.log('');
+console.log('  Backend only:');
+console.log('    npm run dev:server');
+console.log('');
+console.log('  Frontend only:');
+console.log('    npm run dev:web');
