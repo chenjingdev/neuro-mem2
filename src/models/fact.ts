@@ -35,6 +35,10 @@ export interface Fact {
   predicate?: string;
   /** Optional object entity (the value or target) */
   object?: string;
+  /** Level 1: short summary of the fact (1-2 sentences) */
+  summary?: string;
+  /** Level 0: one-line frontmatter label for quick scanning */
+  frontmatter?: string;
   /** Whether this fact has been superseded by a newer fact */
   superseded: boolean;
   /** ID of the fact that supersedes this one, if any */
@@ -82,6 +86,10 @@ export interface ExtractedFact {
   subject?: string;
   predicate?: string;
   object?: string;
+  /** Level 1: short summary */
+  summary?: string;
+  /** Level 0: one-line frontmatter */
+  frontmatter?: string;
 }
 
 /**
@@ -106,6 +114,10 @@ export interface CreateFactInput {
   subject?: string;
   predicate?: string;
   object?: string;
+  /** Level 1: short summary */
+  summary?: string;
+  /** Level 0: one-line frontmatter */
+  frontmatter?: string;
   /** Optional metadata */
   metadata?: Record<string, unknown>;
 }
@@ -118,6 +130,10 @@ export interface UpdateFactInput {
   confidence?: number;
   /** Updated category */
   category?: FactCategory;
+  /** Level 1: short summary (1-2 sentences) */
+  summary?: string;
+  /** Level 0: one-line frontmatter label */
+  frontmatter?: string;
   /** Mark as superseded */
   superseded?: boolean;
   /** ID of the superseding fact */

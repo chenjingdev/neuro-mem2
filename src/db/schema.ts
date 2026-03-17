@@ -3,7 +3,7 @@
  * All DDL statements are idempotent (IF NOT EXISTS).
  */
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS facts (
   subject TEXT,                         -- Optional SPO triple: subject
   predicate TEXT,                       -- Optional SPO triple: predicate
   object TEXT,                          -- Optional SPO triple: object
+  summary TEXT,                          -- Level 1: short summary of the fact
+  frontmatter TEXT,                      -- Level 0: one-line frontmatter label
   superseded INTEGER NOT NULL DEFAULT 0, -- Boolean: 0=active, 1=superseded
   superseded_by TEXT,                   -- ID of superseding fact
   created_at TEXT NOT NULL,
@@ -157,3 +159,15 @@ CREATE INDEX IF NOT EXISTS idx_batch_jobs_session
 CREATE INDEX IF NOT EXISTS idx_batch_jobs_status
   ON batch_jobs(status, created_at);
 `;
+
+/**
+ * Schema migrations keyed by target version.
+ * Each migration brings the schema from version N-1 to N.
+ */
+export const SCHEMA_MIGRATIONS: Record<number, string> = {
+  5: `
+    -- Add summary (Level 1) and frontmatter (Level 0) columns to facts table
+    ALTER TABLE facts ADD COLUMN summary TEXT;
+    ALTER TABLE facts ADD COLUMN frontmatter TEXT;
+  `,
+};

@@ -64,6 +64,12 @@ export {
   type EmbeddingResponse,
 } from './embedding-provider.js';
 
+// ── Local embedding provider (all-MiniLM-L6-v2 via @huggingface/transformers) ──
+export {
+  LocalEmbeddingProvider,
+  resetLocalEmbeddingPipeline,
+} from './local-embedding-provider.js';
+
 // ── Result merger ──
 export {
   ResultMerger,
@@ -92,6 +98,85 @@ export {
   type ChunkSearchResult,
   type ChunkSearchStats,
 } from './memory-chunk-searcher.js';
+
+// ── Unified retriever (single pipeline: local embedding → cosine similarity → top-K anchors) ──
+export {
+  UnifiedRetriever,
+  DEFAULT_UNIFIED_RETRIEVER_CONFIG,
+} from './unified-retriever.js';
+
+export type {
+  UnifiedRetrieverConfig,
+  UnifiedRecallQuery,
+  UnifiedRecallResult,
+  UnifiedRecallDiagnostics,
+  UnifiedTraceHook,
+  UnifiedTraceEvent,
+  PipelineStage,
+} from './unified-retriever.js';
+
+// ── Re-ranking context builder (anchor → fact context for LLM re-ranking) ──
+export {
+  RerankingContextBuilder,
+  DEFAULT_RERANKING_CONTEXT_CONFIG,
+} from './reranking-context-builder.js';
+
+export type {
+  RerankingContextConfig,
+  LinkedFact,
+  AnchorContext,
+  RerankingContext,
+  RerankingContextStats,
+} from './reranking-context-builder.js';
+
+// ── BFS Expander (weighted-edge BFS from re-judged anchors) ──
+export {
+  BFSExpander,
+  DEFAULT_BFS_EXPANDER_CONFIG,
+} from './bfs-expander.js';
+
+export type {
+  BFSExpanderConfig,
+  BFSExpansionResult,
+  BFSExpansionStats,
+} from './bfs-expander.js';
+
+// ── Graph+Content ReRanker (graph traversal + Level 0/Level 1 content signals) ──
+export {
+  ReRanker,
+  DEFAULT_RERANKER_CONFIG as DEFAULT_GRAPH_RERANKER_CONFIG,
+} from './reranker.js';
+
+export type {
+  ReRankerConfig,
+  ReRankResult,
+  ReRankStats,
+} from './reranker.js';
+
+// ── LLM Reranker (cortical re-evaluation of coarse retrieval results) ──
+export {
+  LLMReranker,
+  DEFAULT_RERANKER_CONFIG,
+} from './llm-reranker.js';
+
+export type {
+  LLMRerankerConfig,
+  LLMRerankResult,
+  LLMRerankStats,
+} from './llm-reranker.js';
+
+// ── Memory context formatter (UnifiedRecallResult → LLM prompt context) ──
+export {
+  MemoryContextFormatter,
+  DEFAULT_MEMORY_CONTEXT_CONFIG,
+} from './memory-context-formatter.js';
+
+export type {
+  MemoryContextFormatterConfig,
+  MemoryContextFormat,
+  DetailLevel,
+  FormattedMemoryContext,
+} from './memory-context-formatter.js';
 
 // ── Shared types ──
 export type {

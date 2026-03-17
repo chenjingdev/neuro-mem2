@@ -25,6 +25,7 @@
   "license": "ISC",
   "dependencies": {
     "@hono/node-server": "^1.19.11",
+    "@huggingface/transformers": "^3.8.1",
     "@mariozechner/pi-ai": "^0.58.4",
     "better-sqlite3": "^12.8.0",
     "hono": "^4.12.8",

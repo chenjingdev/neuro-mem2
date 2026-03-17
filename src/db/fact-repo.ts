@@ -20,6 +20,8 @@ interface FactRow {
   subject: string | null;
   predicate: string | null;
   object: string | null;
+  summary: string | null;
+  frontmatter: string | null;
   superseded: number;
   superseded_by: string | null;
   created_at: string;
@@ -41,6 +43,8 @@ function rowToFact(row: FactRow): Fact {
     subject: row.subject ?? undefined,
     predicate: row.predicate ?? undefined,
     object: row.object ?? undefined,
+    summary: row.summary ?? undefined,
+    frontmatter: row.frontmatter ?? undefined,
     superseded: row.superseded === 1,
     supersededBy: row.superseded_by ?? undefined,
     createdAt: row.created_at,
@@ -65,9 +69,10 @@ export class FactRepository {
         id, conversation_id, source_message_ids, source_turn_index,
         content, category, confidence, entities,
         subject, predicate, object,
+        summary, frontmatter,
         superseded, superseded_by,
         created_at, updated_at, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?)
     `).run(
       id,
       input.conversationId,
@@ -80,6 +85,8 @@ export class FactRepository {
       input.subject ?? null,
       input.predicate ?? null,
       input.object ?? null,
+      input.summary ?? null,
+      input.frontmatter ?? null,
       now,
       now,
       input.metadata ? JSON.stringify(input.metadata) : null,
@@ -97,6 +104,8 @@ export class FactRepository {
       subject: input.subject,
       predicate: input.predicate,
       object: input.object,
+      summary: input.summary,
+      frontmatter: input.frontmatter,
       superseded: false,
       createdAt: now,
       updatedAt: now,
@@ -147,6 +156,14 @@ export class FactRepository {
     if (input.supersededBy !== undefined) {
       sets.push('superseded_by = ?');
       params.push(input.supersededBy);
+    }
+    if (input.summary !== undefined) {
+      sets.push('summary = ?');
+      params.push(input.summary);
+    }
+    if (input.frontmatter !== undefined) {
+      sets.push('frontmatter = ?');
+      params.push(input.frontmatter);
     }
     if (input.metadata !== undefined) {
       const mergedMeta = { ...existing.metadata, ...input.metadata };
@@ -257,6 +274,40 @@ export class FactRepository {
       ORDER BY created_at DESC LIMIT ?
     `).all(limit) as FactRow[];
     return rows.map(rowToFact);
+  }
+
+  /**
+   * Get active facts that are missing Level 0 (frontmatter) or Level 1 (summary).
+   * Used for backfill / lazy generation of summaries.
+   */
+  getWithoutSummary(limit = 100): Fact[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM facts
+      WHERE superseded = 0 AND (summary IS NULL OR frontmatter IS NULL)
+      ORDER BY created_at DESC LIMIT ?
+    `).all(limit) as FactRow[];
+    return rows.map(rowToFact);
+  }
+
+  /**
+   * Batch-update summary and frontmatter for multiple facts in a single transaction.
+   * Input: array of { id, summary, frontmatter }.
+   */
+  updateSummaries(updates: Array<{ id: string; summary: string; frontmatter: string }>): void {
+    if (updates.length === 0) return;
+
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE facts SET summary = ?, frontmatter = ?, updated_at = ? WHERE id = ?
+    `);
+
+    const txn = this.db.transaction(() => {
+      for (const u of updates) {
+        stmt.run(u.summary, u.frontmatter, now, u.id);
+      }
+    });
+
+    txn();
   }
 
   /**

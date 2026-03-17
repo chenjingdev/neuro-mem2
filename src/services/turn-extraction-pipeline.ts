@@ -118,6 +118,8 @@ export class TurnExtractionPipeline {
           subject: f.subject,
           predicate: f.predicate,
           object: f.object,
+          summary: f.summary,
+          frontmatter: f.frontmatter,
           metadata: f.metadata,
         }));
 

@@ -272,4 +272,116 @@ describe('Fact Node Data Model', () => {
       expect(fact.updatedAt).toMatch(isoRegex);
     });
   });
+
+  describe('Level 0/Level 1 summary storage', () => {
+    it('should store summary and frontmatter on create', () => {
+      const fact = factRepo.create(makeInput({
+        summary: 'User prefers TypeScript for backend work due to type safety.',
+        frontmatter: 'preference: TypeScript for backends',
+      }));
+
+      expect(fact.summary).toBe('User prefers TypeScript for backend work due to type safety.');
+      expect(fact.frontmatter).toBe('preference: TypeScript for backends');
+
+      // Verify round-trip through DB
+      const retrieved = factRepo.getById(fact.id);
+      expect(retrieved!.summary).toBe(fact.summary);
+      expect(retrieved!.frontmatter).toBe(fact.frontmatter);
+    });
+
+    it('should default summary and frontmatter to undefined when not provided', () => {
+      const fact = factRepo.create(makeInput());
+      expect(fact.summary).toBeUndefined();
+      expect(fact.frontmatter).toBeUndefined();
+
+      const retrieved = factRepo.getById(fact.id);
+      expect(retrieved!.summary).toBeUndefined();
+      expect(retrieved!.frontmatter).toBeUndefined();
+    });
+
+    it('should update summary and frontmatter via update()', async () => {
+      const fact = factRepo.create(makeInput());
+      await new Promise(r => setTimeout(r, 5));
+
+      const updated = factRepo.update(fact.id, {
+        summary: 'Added summary later.',
+        frontmatter: 'preference: TS backend',
+      });
+
+      expect(updated).not.toBeNull();
+      expect(updated!.summary).toBe('Added summary later.');
+      expect(updated!.frontmatter).toBe('preference: TS backend');
+      expect(updated!.updatedAt > fact.updatedAt).toBe(true);
+    });
+
+    it('should find facts without summary via getWithoutSummary()', () => {
+      // Create fact with summary
+      factRepo.create(makeInput({
+        content: 'Fact with summary',
+        summary: 'Has summary',
+        frontmatter: 'has: frontmatter',
+      }));
+      // Create fact without summary
+      factRepo.create(makeInput({ content: 'Fact without summary' }));
+      // Create fact with only frontmatter (still missing summary)
+      factRepo.create(makeInput({
+        content: 'Fact with only frontmatter',
+        frontmatter: 'has: frontmatter only',
+      }));
+
+      const missing = factRepo.getWithoutSummary();
+      expect(missing).toHaveLength(2);
+      expect(missing.map(f => f.content)).toContain('Fact without summary');
+      expect(missing.map(f => f.content)).toContain('Fact with only frontmatter');
+    });
+
+    it('should not return superseded facts in getWithoutSummary()', () => {
+      const old = factRepo.create(makeInput({ content: 'Superseded fact' }));
+      const newer = factRepo.create(makeInput({
+        content: 'Newer fact',
+        summary: 'Has summary',
+        frontmatter: 'has: frontmatter',
+      }));
+      factRepo.supersede(old.id, newer.id);
+
+      const missing = factRepo.getWithoutSummary();
+      expect(missing.map(f => f.content)).not.toContain('Superseded fact');
+    });
+
+    it('should batch update summaries via updateSummaries()', () => {
+      const f1 = factRepo.create(makeInput({ content: 'Fact 1' }));
+      const f2 = factRepo.create(makeInput({ content: 'Fact 2' }));
+      const f3 = factRepo.create(makeInput({ content: 'Fact 3' }));
+
+      factRepo.updateSummaries([
+        { id: f1.id, summary: 'Summary 1', frontmatter: 'FM 1' },
+        { id: f2.id, summary: 'Summary 2', frontmatter: 'FM 2' },
+      ]);
+
+      const r1 = factRepo.getById(f1.id)!;
+      const r2 = factRepo.getById(f2.id)!;
+      const r3 = factRepo.getById(f3.id)!;
+
+      expect(r1.summary).toBe('Summary 1');
+      expect(r1.frontmatter).toBe('FM 1');
+      expect(r2.summary).toBe('Summary 2');
+      expect(r2.frontmatter).toBe('FM 2');
+      expect(r3.summary).toBeUndefined();
+      expect(r3.frontmatter).toBeUndefined();
+    });
+
+    it('should handle empty array in updateSummaries()', () => {
+      // Should not throw
+      factRepo.updateSummaries([]);
+    });
+
+    it('should respect limit in getWithoutSummary()', () => {
+      for (let i = 0; i < 5; i++) {
+        factRepo.create(makeInput({ content: `Fact ${i}` }));
+      }
+
+      const limited = factRepo.getWithoutSummary(3);
+      expect(limited).toHaveLength(3);
+    });
+  });
 });

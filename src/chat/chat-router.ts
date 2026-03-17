@@ -46,6 +46,7 @@ import type { FactExtractor, FactExtractionResult } from '../extraction/fact-ext
 import type { FactExtractionInput } from '../models/fact.js';
 import type { EventBus, FactsExtractedEvent, ExtractionErrorEvent } from '../events/event-bus.js';
 import type { IngestService } from '../services/ingest.js';
+import type { UnifiedRetriever, UnifiedRecallResult, UnifiedTraceEvent } from '../retrieval/unified-retriever.js';
 import type Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { formatSSE, safeSerialize } from './sse-helpers.js';
@@ -283,6 +284,12 @@ export interface ChatRouterDependencies {
   llmProvider: LLMProvider;
   /** Dual-path memory retriever (optional — recall skipped if not provided) */
   retriever?: DualPathRetriever;
+  /**
+   * Unified retriever — single-pipeline brain-like retrieval using local embeddings
+   * and anchor-association-based recall (replaces DualPathRetriever).
+   * When provided, takes precedence over `retriever` for the recall phase.
+   */
+  unifiedRetriever?: UnifiedRetriever;
   /** Default system prompt (optional) */
   defaultSystemPrompt?: string;
   /** Fact extractor for ingestion pipeline tracing (optional — ingestion skipped if not provided) */
@@ -410,8 +417,99 @@ async function executePipeline(
   // ── Phase 1: Memory Recall ──
   let memoryContext = '';
   let recallResult: RecallResult | null = null;
+  let unifiedResult: UnifiedRecallResult | null = null;
 
-  if (deps.retriever) {
+  // ── Phase 1A: Unified Retriever (preferred — brain-like anchor-association recall) ──
+  if (deps.unifiedRetriever) {
+    writer.trace({
+      stage: 'recall',
+      status: 'start',
+      data: { query: request.message, userId: DEBUG_USER_ID, mode: 'unified' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const recallStart = performance.now();
+
+    // Forward unified pipeline trace events to SSE
+    const unifiedTraceHook = (event: UnifiedTraceEvent) => {
+      writer.trace({
+        stage: event.stage,
+        status: event.status,
+        durationMs: event.durationMs,
+        data: event.detail ?? {},
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    try {
+      // Create a temporary retriever instance with the trace hook wired up
+      // The UnifiedRetriever accepts traceHook in its constructor, but we can
+      // also just call recall() and map the diagnostics.stages to trace events.
+      unifiedResult = await deps.unifiedRetriever.recall({
+        text: request.message,
+      });
+
+      const recallDuration = round2(performance.now() - recallStart);
+
+      // Emit sub-stage trace events from diagnostics for pipeline traceability
+      for (const stage of unifiedResult.diagnostics.stages) {
+        writer.trace({
+          stage: stage.name,
+          status: stage.status,
+          durationMs: stage.durationMs,
+          data: stage.detail ? { detail: stage.detail } : {},
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Build memory context from unified recall items
+      if (unifiedResult.items.length > 0) {
+        memoryContext = unifiedResult.items
+          .map(
+            (item, i) =>
+              `[Memory ${i + 1}] (${item.nodeType}, score: ${item.score.toFixed(3)}): ${item.content}`,
+          )
+          .join('\n');
+      }
+
+      writer.trace({
+        stage: 'recall',
+        status: 'complete',
+        durationMs: recallDuration,
+        data: {
+          mode: 'unified',
+          itemCount: unifiedResult.items.length,
+          activatedAnchors: unifiedResult.activatedAnchors.map(a => ({
+            anchorId: a.anchorId,
+            label: a.label,
+            similarity: a.similarity,
+          })),
+          diagnostics: {
+            embeddingTimeMs: unifiedResult.diagnostics.embeddingTimeMs,
+            anchorSearchTimeMs: unifiedResult.diagnostics.anchorSearchTimeMs,
+            bfsNodesAdded: unifiedResult.diagnostics.bfsNodesAdded,
+            edgesReinforced: unifiedResult.diagnostics.edgesReinforced,
+            totalTimeMs: unifiedResult.diagnostics.totalTimeMs,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (recallErr) {
+      const recallDuration = round2(performance.now() - recallStart);
+
+      writer.trace({
+        stage: 'recall',
+        status: 'error',
+        durationMs: recallDuration,
+        data: {
+          mode: 'unified',
+          error: recallErr instanceof Error ? recallErr.message : String(recallErr),
+        },
+        timestamp: new Date().toISOString(),
+      });
+      // Non-fatal — continue without memory context
+    }
+  } else if (deps.retriever) {
     writer.trace({
       stage: 'recall',
       status: 'start',
@@ -478,8 +576,8 @@ async function executePipeline(
   }
 
   // ── Phase 1b: Fact-based recall fallback (no embedding API needed) ──
-  // If vector/graph recall returned no items, load recent facts directly from DB.
-  const recallItems = recallResult?.items ?? [];
+  // If vector/graph/unified recall returned no items, load recent facts directly from DB.
+  const recallItems = recallResult?.items ?? unifiedResult?.items ?? [];
   if (recallItems.length === 0 && deps.factRepo) {
     const factRecallStart = performance.now();
 
@@ -540,17 +638,22 @@ async function executePipeline(
 
   const formatStart = performance.now();
 
+  const totalRecallItems = recallResult?.items.length ?? unifiedResult?.items.length ?? 0;
+
   writer.trace({
     stage: 'format',
     status: 'start',
     data: {
-      itemCount: recallResult?.items.length ?? 0,
+      itemCount: totalRecallItems,
       format: 'numbered-list',
+      source: unifiedResult ? 'unified' : recallResult ? 'dual-path' : 'none',
     },
     timestamp: new Date().toISOString(),
   });
 
-  if (recallResult && recallResult.items.length > 0) {
+  // For DualPathRetriever results, build memory context here
+  // (Unified retriever already built memoryContext in Phase 1A)
+  if (!unifiedResult && recallResult && recallResult.items.length > 0) {
     memoryContext = recallResult.items
       .map(
         (item, i) =>
@@ -570,7 +673,7 @@ async function executePipeline(
     data: {
       charCount: memoryContext.length,
       truncated: formatTruncated,
-      itemsIncluded: recallResult?.items.length ?? 0,
+      itemsIncluded: totalRecallItems,
       contextPreview: memoryContext.slice(0, 300),
     },
     timestamp: new Date().toISOString(),
@@ -954,7 +1057,8 @@ async function executePipeline(
     data: {
       userId: DEBUG_USER_ID,
       responseLength: fullResponse.length,
-      memoryItemCount: recallResult?.items.length ?? 0,
+      memoryItemCount: recallResult?.items.length ?? unifiedResult?.items.length ?? 0,
+      recallMode: unifiedResult ? 'unified' : recallResult ? 'dual-path' : 'none',
       factCount: ingestionResult?.facts.length ?? ingestionHandlerResult?.factCount ?? 0,
       stages: writer.getCollector().getStageSummary(),
     },
@@ -1087,6 +1191,7 @@ export function createChatRouter(deps: ChatRouterDependencies): Hono {
       subsystem: 'chat',
       provider: deps.llmProvider.name,
       hasRetriever: !!deps.retriever,
+      hasUnifiedRetriever: !!deps.unifiedRetriever,
       userId: DEBUG_USER_ID,
       timestamp: new Date().toISOString(),
     });

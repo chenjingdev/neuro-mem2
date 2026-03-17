@@ -6,3 +6,5 @@ dist/
 __pycache__/
 *.egg-info/
 *.pyc
+nero.db-shm
+nero.db-wal

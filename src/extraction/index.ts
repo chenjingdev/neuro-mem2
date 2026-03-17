@@ -33,6 +33,37 @@ export {
 export { buildEpisodeExtractionRequest, getEpisodeExtractionSystemPrompt } from './episode-prompt.js';
 export { parseEpisodeResponse, type EpisodeParseResult } from './episode-parser.js';
 
+// Summary generation (Level 0 frontmatter + Level 1 summary)
+export {
+  buildSummaryGenerationRequest,
+  buildSingleFactSummaryRequest,
+  getSummaryGenerationSystemPrompt,
+  type SummaryGenerationInput,
+  type GeneratedSummary,
+} from './summary-prompt.js';
+export {
+  parseSummaryResponse,
+  buildSummaryMap,
+  type SummaryParseResult,
+} from './summary-parser.js';
+
+// Frontmatter generation (structured Level 0 frontmatter with keywords + domain)
+export {
+  buildFrontmatterRequest,
+  buildBatchFrontmatterRequest,
+  getFrontmatterSystemPrompt,
+  type FactFrontmatter,
+  type FrontmatterInput,
+  type FrontmatterResult,
+} from './frontmatter-prompt.js';
+export {
+  parseFrontmatterResponse,
+  parseBatchFrontmatterResponse,
+  generateFallbackFrontmatter,
+  type FrontmatterParseResult,
+  type BatchFrontmatterParseResult,
+} from './frontmatter-parser.js';
+
 // OpenAI LLM provider (streaming-capable)
 export { OpenAILLMProvider, type OpenAIProviderConfig } from './openai-llm-provider.js';
 export {
@@ -42,3 +73,14 @@ export {
 
 // Anthropic LLM provider (streaming-capable)
 export { AnthropicLLMProvider, type AnthropicProviderConfig } from './anthropic-llm-provider.js';
+
+// Anchor judgment prompt (LLM-based anchor binding decisions)
+export {
+  buildAnchorJudgmentRequest,
+  getAnchorJudgmentSystemPrompt,
+  type AnchorJudgmentInput,
+  type AnchorJudgmentResponse,
+  type AnchorDecision,
+  type AnchorConnectDecision,
+  type AnchorCreateDecision,
+} from './anchor-judgment-prompt.js';
