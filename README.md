@@ -47,6 +47,67 @@ npm install
 npm run build
 ```
 
+### Visual Debug Chat App
+
+메모리 파이프라인이 실제로 어떻게 동작하는지 시각적으로 확인할 수 있는 디버그 채팅앱입니다.
+
+```
+┌─────────────────────────────────────────────────┐
+│  Chat Panel          │  Timeline Panel          │
+│                      │                          │
+│  User: 인증 어떻게?  │  ▸ vector_search  12ms   │
+│                      │  ▸ graph_traversal 8ms   │
+│  AI: JWT 기반을...   │  ▸ merge          3ms    │
+│                      │  ▸ inject         1ms    │
+│                      │  ▸ fact_extract   45ms   │
+│                      │                          │
+│  [메시지 입력...]    │  ▾ Detail: raw JSON      │
+└─────────────────────────────────────────────────┘
+```
+
+**1단계: 인증 설정**
+
+`~/.nero-mem/auth.json` 또는 `~/.codex/auth.json`에 API 키를 설정합니다:
+
+```json
+{
+  "openai_api_key": "sk-...",
+  "anthropic_api_key": "sk-ant-...",
+  "provider": "openai"
+}
+```
+
+또는 환경변수로:
+```bash
+export NERO_AUTH_PATH=./auth.json
+```
+
+**2단계: 백엔드 서버 실행**
+
+```bash
+npm run build
+node dist/index.js  # http://127.0.0.1:3030
+```
+
+**3단계: 프론트엔드 실행**
+
+```bash
+cd web
+npm install
+npm run dev         # http://localhost:5173
+```
+
+브라우저에서 `http://localhost:5173`을 열면 채팅앱이 실행됩니다.
+
+**기능:**
+- 채팅 메시지 송수신 (SSE 스트리밍)
+- 타임라인 패널: recall 파이프라인 (vector search → graph traversal → merge → inject) 각 단계별 raw JSON
+- 타임라인 패널: ingestion 파이프라인 (Fact 추출) 실시간 표시
+- 각 단계 클릭 시 상세 JSON 드릴다운
+- 세션 목록에서 이전 대화 + 타임라인 재확인
+- 대화 기록 + tracing 데이터 SQLite 영구 저장
+- 세션 종료 시 Episode/Concept 배치 추출 자동 트리거
+
 ### REST API 서버
 
 ```typescript
@@ -93,6 +154,11 @@ export NERO_PROXY_API_KEY=sk-your-key
 | `POST` | `/ingest` | 대화 전체를 기억으로 저장 |
 | `POST` | `/ingest/append` | 기존 대화에 메시지 추가 |
 | `POST` | `/recall` | 질문에 맞는 기억 검색 |
+| `POST` | `/chat` | 채팅 메시지 전송 (SSE 스트림 반환) |
+| `GET` | `/sessions` | 채팅 세션 목록 조회 |
+| `GET` | `/sessions/:id` | 세션 상세 (대화 + tracing) |
+| `POST` | `/sessions/start` | 새 채팅 세션 시작 |
+| `POST` | `/sessions/:id/end` | 세션 종료 (배치 추출 트리거) |
 | `GET` | `/health` | 헬스체크 |
 
 ### 대화 저장 (Ingest)
@@ -165,8 +231,17 @@ npm run test:watch    # watch 모드
 src/
 ├── api/            REST API (Hono 프레임워크)
 │   └── middleware/  인증, rate limiting, 맥락 주입
-├── db/             SQLite 저장소 (better-sqlite3)
+├── chat/           Visual Debug Chat App 백엔드
+│   ├── auth-loader.ts      codex auth.json 토큰 로더
+│   ├── chat-router.ts      POST /chat SSE 엔드포인트
+│   ├── sessions-router.ts  세션 lifecycle API
+│   ├── history-router.ts   세션 히스토리 조회 API
+│   ├── trace-collector.ts  파이프라인 tracing 수집기
+│   └── db/                 채팅 전용 SQLite 저장소
+├── db/             메모리 SQLite 저장소 (better-sqlite3)
 ├── extraction/     LLM 기반 Fact/Episode/Concept 추출
+│   ├── openai-llm-provider.ts   OpenAI streaming provider
+│   └── anthropic-llm-provider.ts Anthropic streaming provider
 ├── models/         데이터 모델 & 타입 정의
 ├── proxy/          LLM API 프록시 미들웨어
 ├── retrieval/      Dual-path retrieval (벡터 + 그래프)
@@ -174,7 +249,12 @@ src/
 ├── services/       파이프라인 오케스트레이션
 └── events/         이벤트 버스
 
-tests/              40+ 테스트 파일
+web/                React + Vite SPA (Debug Chat UI)
+├── src/
+│   ├── components/  ChatPanel, TimelinePanel, DetailPanel, SessionList
+│   ├── hooks/       useChat, useTimeline, useSessions, SSE parser
+│   └── pages/       ChatPage
+tests/              55+ 테스트 파일
 sdk/python/         Python SDK 클라이언트
 ```
 
@@ -183,8 +263,10 @@ sdk/python/         Python SDK 클라이언트
 - **Runtime**: Node.js (TypeScript, ESM)
 - **DB**: SQLite (better-sqlite3) - 외부 DB 서버 불필요
 - **API**: Hono
+- **Frontend**: React + Vite
 - **Test**: Vitest
 - **기억 추출**: LLM API (교체 가능한 provider 인터페이스)
+- **LLM 지원**: OpenAI, Anthropic (streaming + completion)
 
 ## 환경 변수
 
@@ -197,6 +279,7 @@ sdk/python/         Python SDK 클라이언트
 | `NERO_PROXY_DB_PATH` | `~/.nero-mem/nero.db` | SQLite DB 경로 |
 | `NERO_PROXY_MAX_MEMORIES` | `10` | 요청당 최대 주입 기억 수 |
 | `NERO_PROXY_LOG_LEVEL` | `info` | 로그 레벨 |
+| `NERO_AUTH_PATH` | - | auth.json 경로 (채팅앱용) |
 
 ## License
 
