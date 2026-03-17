@@ -25,6 +25,9 @@ import { OpenAICodexLLMProvider } from './extraction/openai-codex-llm-provider.j
 import { AnthropicLLMProvider } from './extraction/anthropic-llm-provider.js';
 import { MockLLMProvider } from './extraction/llm-provider.js';
 import type { LLMProvider } from './extraction/llm-provider.js';
+import { FactExtractor } from './extraction/fact-extractor.js';
+import { DualPathRetriever } from './retrieval/dual-path-retriever.js';
+import { MockEmbeddingProvider } from './retrieval/embedding-provider.js';
 
 const port = parseInt(process.env['PORT'] ?? '3030', 10);
 const dbPath = process.env['DB_PATH'] ?? './nero.db';
@@ -71,15 +74,25 @@ if (auth) {
   llmProvider = new MockLLMProvider();
 }
 
+// ── Fact Extractor (uses LLM for extraction, no separate embedding API) ──
+const factExtractor = new FactExtractor(llmProvider);
+
+// ── Retriever (hash-based embedding — no external embedding API) ──
+const embeddingProvider = new MockEmbeddingProvider(256);
+const retriever = new DualPathRetriever(db, embeddingProvider);
+
 // ── Start Server ──
 startServer(
   {
     ingestService,
+    retriever,
     db,
     auth: false,       // localhost debug — no API key auth
     rateLimit: false,   // localhost debug — no rate limiting
     chatDeps: {
       llmProvider,
+      retriever,
+      factExtractor,
       chatDb,
       eventBus,
       ingestService,
