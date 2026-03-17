@@ -37,6 +37,7 @@ import { RateLimitStore } from './middleware/rate-limiter.js';
 import type { RateLimitConfig } from './middleware/types.js';
 import { createChatRouter, type ChatRouterDependencies } from '../chat/chat-router.js';
 import { createSessionsRouter } from '../chat/sessions-router.js';
+import { createHistoryRouter } from '../chat/history-router.js';
 
 // ─── App Dependencies ────────────────────────────────────
 
@@ -180,22 +181,25 @@ export function createRouter(deps: RouterDependencies): Hono {
   });
 
   // ── Mount Chat Router (Visual Debug Chat App) ──
-  // The chat sub-router defines its own /chat and /chat/health routes,
-  // so we mount it at the root path. This keeps the chat endpoints at
-  // /chat and /chat/health on the main app, matching the SSE protocol spec.
+  // The chat sub-router defines /chat and /chat/health routes.
+  // Mounted at /api so endpoints become /api/chat, /api/chat/health.
   // Localhost-only debug use — no auth or rate limiting applied.
   if (deps.chatDeps) {
     const chatRouter = createChatRouter(deps.chatDeps);
-    app.route('/', chatRouter);
+    app.route('/api', chatRouter);
   }
 
   // ── Mount Sessions Router (Visual Debug Chat App — session listing & detail) ──
-  // Uses the chatDb handle (or chatDeps.chatDb) to query stored conversations.
+  // Sessions router defines /api/sessions/* internally, so mount at root.
+  // History router defines /conversations/* internally, so mount at /api.
   {
     const sessionsDb = deps.chatDb ?? deps.chatDeps?.chatDb;
     if (sessionsDb) {
       const sessionsRouter = createSessionsRouter({ db: sessionsDb });
       app.route('/', sessionsRouter);
+
+      const historyRouter = createHistoryRouter({ db: sessionsDb });
+      app.route('/api', historyRouter);
     }
   }
 

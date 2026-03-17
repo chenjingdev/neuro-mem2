@@ -85,8 +85,12 @@ export NERO_AUTH_PATH=./auth.json
 **2단계: 백엔드 서버 실행**
 
 ```bash
+# 개발 모드 (tsx, 빌드 불필요)
+npm run dev
+
+# 또는 프로덕션 모드
 npm run build
-node dist/index.js  # http://127.0.0.1:3030
+npm start
 ```
 
 **3단계: 프론트엔드 실행**
@@ -108,15 +112,14 @@ npm run dev         # http://localhost:5173
 - 대화 기록 + tracing 데이터 SQLite 영구 저장
 - 세션 종료 시 Episode/Concept 배치 추출 자동 트리거
 
-### REST API 서버
+### 라이브러리로 사용
 
 ```typescript
-import { createDatabase } from 'nero-mem2';
-import { IngestService } from 'nero-mem2';
-import { startServer } from 'nero-mem2';
+import { createDatabase, ConversationRepository, IngestService, startServer } from 'nero-mem2';
 
 const db = createDatabase({ path: './nero.db' });
-const ingestService = new IngestService({ db });
+const repo = new ConversationRepository(db);
+const ingestService = new IngestService(repo);
 
 startServer({ ingestService }, { port: 3030 });
 // → http://127.0.0.1:3030
@@ -154,11 +157,11 @@ export NERO_PROXY_API_KEY=sk-your-key
 | `POST` | `/ingest` | 대화 전체를 기억으로 저장 |
 | `POST` | `/ingest/append` | 기존 대화에 메시지 추가 |
 | `POST` | `/recall` | 질문에 맞는 기억 검색 |
-| `POST` | `/chat` | 채팅 메시지 전송 (SSE 스트림 반환) |
-| `GET` | `/sessions` | 채팅 세션 목록 조회 |
-| `GET` | `/sessions/:id` | 세션 상세 (대화 + tracing) |
-| `POST` | `/sessions/start` | 새 채팅 세션 시작 |
-| `POST` | `/sessions/:id/end` | 세션 종료 (배치 추출 트리거) |
+| `POST` | `/api/chat` | 채팅 메시지 전송 (SSE 스트림 반환) |
+| `GET` | `/api/sessions` | 채팅 세션 목록 조회 |
+| `GET` | `/api/sessions/:id` | 세션 상세 (대화 + tracing) |
+| `POST` | `/api/sessions/:id/end` | 세션 종료 (배치 추출 트리거) |
+| `GET` | `/api/conversations` | 대화 목록 조회 |
 | `GET` | `/health` | 헬스체크 |
 
 ### 대화 저장 (Ingest)
@@ -272,6 +275,8 @@ sdk/python/         Python SDK 클라이언트
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
+| `PORT` | `3030` | API 서버 포트 |
+| `DB_PATH` | `./nero.db` | SQLite 데이터베이스 경로 |
 | `NERO_PROXY_PORT` | `8420` | 프록시 서버 포트 |
 | `NERO_PROXY_TARGET_URL` | `https://api.anthropic.com` | 업스트림 LLM API URL |
 | `NERO_PROXY_API_KEY` | - | 업스트림 API 키 |
