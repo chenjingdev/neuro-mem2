@@ -102,6 +102,7 @@ startServer(
       llmProvider,
       retriever,
       factExtractor,
+      factRepo,
       chatDb,
       eventBus,
       ingestService,

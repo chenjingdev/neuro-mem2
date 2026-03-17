@@ -248,6 +248,18 @@ export class FactRepository {
   }
 
   /**
+   * Get recent active facts across all conversations, ordered by most recent first.
+   * Used by the chat pipeline for recency-based recall (no embedding needed).
+   */
+  getRecent(limit = 50): Fact[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM facts WHERE superseded = 0
+      ORDER BY created_at DESC LIMIT ?
+    `).all(limit) as FactRow[];
+    return rows.map(rowToFact);
+  }
+
+  /**
    * Delete a fact by ID (for testing/cleanup only).
    */
   delete(factId: string): boolean {

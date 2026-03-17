@@ -287,6 +287,8 @@ export interface ChatRouterDependencies {
   defaultSystemPrompt?: string;
   /** Fact extractor for ingestion pipeline tracing (optional — ingestion skipped if not provided) */
   factExtractor?: FactExtractor;
+  /** Fact repository for storing/loading facts (optional — enables memory persistence) */
+  factRepo?: import('../db/fact-repo.js').FactRepository;
   /** Event bus for emitting extraction events (optional) */
   eventBus?: EventBus;
   /** Ingest service for storing conversation turns (optional) */
@@ -473,6 +475,65 @@ async function executePipeline(
       data: { reason: 'No retriever configured' },
       timestamp: new Date().toISOString(),
     });
+  }
+
+  // ── Phase 1b: Fact-based recall fallback (no embedding API needed) ──
+  // If vector/graph recall returned no items, load recent facts directly from DB.
+  const recallItems = recallResult?.items ?? [];
+  if (recallItems.length === 0 && deps.factRepo) {
+    const factRecallStart = performance.now();
+
+    writer.trace({
+      stage: 'fact_recall',
+      status: 'start',
+      data: { reason: 'Vector/graph recall empty, loading recent facts from DB' },
+      timestamp: new Date().toISOString(),
+    });
+
+    try {
+      const recentFacts = deps.factRepo.getRecent(30);
+      const factRecallDuration = round2(performance.now() - factRecallStart);
+
+      if (recentFacts.length > 0) {
+        // Build memory context from stored facts
+        memoryContext = recentFacts
+          .map((f, i) => `[${i + 1}] ${f.content}`)
+          .join('\n');
+
+        writer.trace({
+          stage: 'fact_recall',
+          status: 'complete',
+          durationMs: factRecallDuration,
+          data: {
+            factCount: recentFacts.length,
+            facts: recentFacts.map(f => ({
+              id: f.id,
+              content: f.content,
+              category: f.category,
+              confidence: f.confidence,
+            })),
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        writer.trace({
+          stage: 'fact_recall',
+          status: 'complete',
+          durationMs: factRecallDuration,
+          data: { factCount: 0, message: 'No stored facts yet' },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      const factRecallDuration = round2(performance.now() - factRecallStart);
+      writer.trace({
+        stage: 'fact_recall',
+        status: 'error',
+        durationMs: factRecallDuration,
+        data: { error: err instanceof Error ? err.message : String(err) },
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   // ── Phase 2a: Format — convert merged items into context string ──
@@ -760,6 +821,46 @@ async function executePipeline(
         const ingestionDuration = round2(performance.now() - ingestionStart);
 
         if (ingestionResult.ok) {
+          // Save extracted facts to DB for future recall
+          if (deps.factRepo && ingestionResult.facts.length > 0) {
+            try {
+              // Ensure conversation exists in memory DB (FK requirement for facts table)
+              let persistedConvId = conversationId;
+              if (deps.ingestService) {
+                try {
+                  const conv = deps.ingestService.ingestConversation({
+                    source: 'debug-chat',
+                    id: conversationId,
+                    messages: [
+                      { role: 'user', content: request.message },
+                      { role: 'assistant', content: fullResponse },
+                    ],
+                  });
+                  persistedConvId = conv.id;
+                } catch {
+                  // Conversation may already exist — that's fine
+                }
+              }
+
+              deps.factRepo.createMany(
+                ingestionResult.facts.map(f => ({
+                  conversationId: persistedConvId,
+                  sourceMessageIds: [extractionInput.userMessage.id, extractionInput.assistantMessage.id],
+                  sourceTurnIndex: extractionInput.userMessage.turnIndex,
+                  content: f.content,
+                  category: f.category ?? 'general',
+                  confidence: f.confidence ?? 0.8,
+                  entities: f.entities ?? [],
+                  subject: f.subject,
+                  predicate: f.predicate,
+                  object: f.object,
+                })),
+              );
+            } catch (saveErr) {
+              console.error('[chat-router] Failed to save facts:', saveErr);
+            }
+          }
+
           if (deps.eventBus && ingestionResult.facts.length > 0) {
             void deps.eventBus.emit({
               type: 'facts.extracted' as const,
