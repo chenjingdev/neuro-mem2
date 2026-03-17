@@ -1,0 +1,243 @@
+/**
+ * REST API Router — Hono-based HTTP router for nero-mem2.
+ *
+ * Provides two primary endpoints:
+ *   POST /ingest         — Ingest a full conversation
+ *   POST /ingest/append  — Append a message to an existing conversation
+ *   POST /recall         — Retrieve relevant memories for a query
+ *   GET  /health         — Health check endpoint
+ *
+ * All request bodies are validated before processing.
+ * Errors are returned as structured JSON with appropriate HTTP status codes.
+ */
+
+import { Hono, type Context } from 'hono';
+import type Database from 'better-sqlite3';
+import type { IngestService } from '../services/ingest.js';
+import type { DualPathRetriever, RecallQuery } from '../retrieval/dual-path-retriever.js';
+import {
+  validateIngestConversation,
+  validateAppendMessage,
+  validateRecallRequest,
+  toIngestInput,
+  toAppendInput,
+  toRecallResponse,
+  type IngestConversationRequest,
+  type AppendMessageRequest,
+  type RecallRequest,
+  type IngestResponse,
+  type AppendMessageResponse,
+  type RecallResponse,
+  type ErrorResponse,
+} from './schemas.js';
+import { ApiKeyStore } from './middleware/api-key-store.js';
+import { honoAuth, type HonoAuthOptions } from './middleware/hono-auth.js';
+import { honoRateLimit } from './middleware/hono-rate-limit.js';
+import { RateLimitStore } from './middleware/rate-limiter.js';
+import type { RateLimitConfig } from './middleware/types.js';
+
+// ─── App Dependencies ────────────────────────────────────
+
+export interface RouterDependencies {
+  /** Conversation ingestion service */
+  ingestService: IngestService;
+  /** Dual-path memory retriever (optional — recall disabled if not provided) */
+  retriever?: DualPathRetriever;
+  /** SQLite database (needed for API key store; if omitted, auth is disabled) */
+  db?: Database.Database;
+  /** Pre-built API key store (auto-created from db if not provided) */
+  apiKeyStore?: ApiKeyStore;
+  /** Auth config: set to false to disable auth entirely (default: enabled if db/apiKeyStore provided) */
+  auth?: false | Partial<HonoAuthOptions>;
+  /** Rate limit config: set to false to disable rate limiting */
+  rateLimit?: false | Partial<RateLimitConfig>;
+  /** Rate limit store (shared instance for testing) */
+  rateLimitStore?: RateLimitStore;
+}
+
+// ─── Router Factory ──────────────────────────────────────
+
+/**
+ * Create the Hono application with all routes configured.
+ *
+ * Uses dependency injection so the router is fully testable
+ * without needing a real database or LLM provider.
+ *
+ * When `db` or `apiKeyStore` is provided, authentication middleware
+ * is automatically applied. Set `auth: false` to disable.
+ */
+export function createRouter(deps: RouterDependencies): Hono {
+  const app = new Hono();
+
+  // ── Setup API Key Store ──
+  const keyStore = deps.apiKeyStore ?? (deps.db ? new ApiKeyStore(deps.db) : undefined);
+
+  // ── Apply global middleware ──
+
+  // Rate limiting (applied first, before auth — protects against brute force)
+  if (deps.rateLimit !== false) {
+    const store = deps.rateLimitStore ?? new RateLimitStore();
+    app.use('*', honoRateLimit(
+      typeof deps.rateLimit === 'object' ? deps.rateLimit : undefined,
+      store,
+    ));
+  }
+
+  // Authentication (applied after rate limiting)
+  if (deps.auth !== false && keyStore) {
+    const authOpts: HonoAuthOptions = {
+      keyStore,
+      publicPaths: ['/health'],
+      ...(typeof deps.auth === 'object' ? deps.auth : {}),
+    };
+    app.use('*', honoAuth(authOpts));
+  }
+
+  // ── Health Check ──
+  app.get('/health', (c) => {
+    return c.json({
+      status: 'ok',
+      version: '0.1.0',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // ── POST /ingest — Ingest a full conversation ──
+  app.post('/ingest', async (c) => {
+    try {
+      const body = await c.req.json();
+
+      // Validate request
+      const errors = validateIngestConversation(body);
+      if (errors.length > 0) {
+        const errorResp: ErrorResponse = {
+          error: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: errors,
+        };
+        return c.json(errorResp, 400);
+      }
+
+      const input = toIngestInput(body as IngestConversationRequest);
+      const conversation = deps.ingestService.ingestConversation(input);
+
+      const response: IngestResponse = {
+        conversationId: conversation.id,
+        messageCount: conversation.messages.length,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+      };
+
+      return c.json(response, 201);
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
+
+  // ── POST /ingest/append — Append a message to existing conversation ──
+  app.post('/ingest/append', async (c) => {
+    try {
+      const body = await c.req.json();
+
+      const errors = validateAppendMessage(body);
+      if (errors.length > 0) {
+        const errorResp: ErrorResponse = {
+          error: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: errors,
+        };
+        return c.json(errorResp, 400);
+      }
+
+      const input = toAppendInput(body as AppendMessageRequest);
+      const message = deps.ingestService.appendMessage(input);
+
+      const response: AppendMessageResponse = {
+        messageId: message.id,
+        conversationId: message.conversationId,
+        turnIndex: message.turnIndex,
+        createdAt: message.createdAt,
+      };
+
+      return c.json(response, 201);
+    } catch (err) {
+      // Map "Conversation not found" to 404
+      if (err instanceof Error && err.message.includes('not found')) {
+        const errorResp: ErrorResponse = {
+          error: 'NOT_FOUND',
+          message: err.message,
+        };
+        return c.json(errorResp, 404);
+      }
+      return handleError(c, err);
+    }
+  });
+
+  // ── POST /recall — Retrieve relevant memories ──
+  app.post('/recall', async (c) => {
+    try {
+      const body = await c.req.json();
+
+      // Validate request first (even if retriever is not configured)
+      const errors = validateRecallRequest(body);
+      if (errors.length > 0) {
+        const errorResp: ErrorResponse = {
+          error: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: errors,
+        };
+        return c.json(errorResp, 400);
+      }
+
+      if (!deps.retriever) {
+        const errorResp: ErrorResponse = {
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Recall service is not configured. Provide an embedding provider to enable recall.',
+        };
+        return c.json(errorResp, 503);
+      }
+
+      const req = body as RecallRequest;
+
+      // Build RecallQuery from request
+      const query: RecallQuery = {
+        queryText: req.query,
+        config: {
+          ...req.config,
+          ...(req.maxResults !== undefined ? { maxResults: req.maxResults } : {}),
+          ...(req.minScore !== undefined ? { minScore: req.minScore } : {}),
+          ...(req.vectorWeight !== undefined ? { vectorWeight: req.vectorWeight } : {}),
+        },
+      };
+
+      const result = await deps.retriever.recall(query);
+
+      const response: RecallResponse = toRecallResponse(
+        req.query,
+        result,
+        req.includeDiagnostics ?? false,
+      );
+
+      return c.json(response, 200);
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
+
+  return app;
+}
+
+// ─── Error Handling ──────────────────────────────────────
+
+function handleError(c: Context, err: unknown): Response {
+  const message = err instanceof Error ? err.message : 'Internal server error';
+
+  // Log to stderr for debugging (non-blocking)
+  console.error('[nero-mem2 API error]', err);
+
+  const errorResp: ErrorResponse = {
+    error: 'INTERNAL_ERROR',
+    message,
+  };
+  return c.json(errorResp, 500);
+}

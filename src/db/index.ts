@@ -1,0 +1,13 @@
+export { createDatabase, type DatabaseOptions } from './connection.js';
+export { ConversationRepository } from './conversation-repo.js';
+export { FactRepository } from './fact-repo.js';
+export { EpisodeRepository } from './episode-repo.js';
+export { ConceptRepository } from './concept-repo.js';
+export { EdgeRepository } from './edge-repo.js';
+export { AnchorRepository } from './anchor-repo.js';
+export { WeightedEdgeRepository } from './weighted-edge-repo.js';
+export { SessionRepository } from './session-repo.js';
+export { CoRetrievalRepository } from './co-retrieval-repo.js';
+export { MemoryEmbeddingRepository } from './memory-embedding-repo.js';
+export type { MemoryEmbedding, StoreEmbeddingInput, EmbeddingRow } from './memory-embedding-repo.js';
+export { SCHEMA_VERSION } from './schema.js';
