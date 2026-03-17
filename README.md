@@ -1,0 +1,203 @@
+# nero-mem2
+
+AI 대화를 일회성 채팅이 아닌 **구조화된 기억**으로 변환하고, 매 턴마다 현재 질문에 맞는 맥락을 재구성하는 로컬 메모리 인프라.
+
+```
+User ↔ LLM API
+       ↑
+   nero-mem2 proxy
+       ↑
+  ┌────┴────┐
+  │ Memory  │
+  │  Brain  │
+  └────┬────┘
+       │
+  ┌────┴──────────────────────────┐
+  │  Raw Conversations (immutable)│
+  │  ↓ LLM extraction            │
+  │  Facts  Episodes  Concepts   │
+  │     ↕ Anchors (synapse) ↕    │
+  │  Hebbian weight + decay      │
+  │  ↓                           │
+  │  Dual-path retrieval         │
+  │  (vector + graph → merge)    │
+  └───────────────────────────────┘
+```
+
+## 핵심 개념
+
+| 계층 | 역할 | 비유 |
+|------|------|------|
+| **Raw Conversation** | 원본 대화 (불변) | 감각 입력 |
+| **Fact** | 개별 사실 추출 (실시간) | 단기 기억 |
+| **Episode** | 세션 단위 흐름 요약 (배치) | 에피소드 기억 |
+| **Concept** | 반복 주제/개념 (배치) | 의미 기억 |
+| **Anchor** | 기억 노드 간 가중치 연결 | 시냅스 |
+
+- **Hebbian Learning**: 함께 검색된 기억 쌍의 Anchor 가중치가 강화됨
+- **Time Decay**: 오래 쓰지 않은 기억의 가중치가 자연 감쇠
+- **Dual-path Retrieval**: 벡터 유사도 + 그래프 탐색을 병렬 실행 후 merge
+
+## 설치 및 실행
+
+```bash
+git clone https://github.com/chenjingdev/neuro-mem2.git
+cd neuro-mem2
+npm install
+npm run build
+```
+
+### REST API 서버
+
+```typescript
+import { createDatabase } from 'nero-mem2';
+import { IngestService } from 'nero-mem2';
+import { startServer } from 'nero-mem2';
+
+const db = createDatabase({ path: './nero.db' });
+const ingestService = new IngestService({ db });
+
+startServer({ ingestService }, { port: 3030 });
+// → http://127.0.0.1:3030
+```
+
+### LLM Proxy 모드
+
+Claude, GPT 등 LLM API 앞에 프록시로 끼어들어 자동으로 기억 맥락을 주입합니다.
+
+```bash
+# 환경 변수로 설정
+export NERO_PROXY_PORT=8420
+export NERO_PROXY_TARGET_URL=https://api.anthropic.com
+export NERO_PROXY_API_KEY=sk-your-key
+```
+
+또는 설정 파일 `~/.nero-mem/proxy.json`:
+
+```json
+{
+  "port": 8420,
+  "targetUrl": "https://api.anthropic.com",
+  "apiKey": "sk-your-key",
+  "injectionEnabled": true,
+  "maxMemories": 10
+}
+```
+
+프록시를 통해 API 호출하면, nero-mem2가 자동으로 관련 기억을 찾아 시스템 프롬프트에 주입합니다.
+
+## API Endpoints
+
+| Method | Path | 설명 |
+|--------|------|------|
+| `POST` | `/ingest` | 대화 전체를 기억으로 저장 |
+| `POST` | `/ingest/append` | 기존 대화에 메시지 추가 |
+| `POST` | `/recall` | 질문에 맞는 기억 검색 |
+| `GET` | `/health` | 헬스체크 |
+
+### 대화 저장 (Ingest)
+
+```bash
+curl -X POST http://localhost:3030/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "FastAPI로 인증 시스템 만들고 싶어"},
+      {"role": "assistant", "content": "JWT 기반 인증을 추천합니다..."}
+    ]
+  }'
+```
+
+### 기억 검색 (Recall)
+
+```bash
+curl -X POST http://localhost:3030/recall \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "인증 시스템 어떻게 만들기로 했지?",
+    "maxResults": 5
+  }'
+```
+
+## Python SDK
+
+```bash
+cd sdk/python
+pip install -e .
+```
+
+```python
+from nero_mem import MemoryClient
+
+client = MemoryClient("http://localhost:3030")
+
+# 대화 저장
+client.ingest(messages=[
+    {"role": "user", "content": "React vs Vue 어떤 게 나아?"},
+    {"role": "assistant", "content": "프로젝트 규모에 따라 다릅니다..."},
+])
+
+# 기억 검색
+results = client.recall("프론트엔드 프레임워크 뭐 쓰기로 했지?")
+for item in results.items:
+    print(f"[{item.score}] {item.content}")
+```
+
+Async 클라이언트도 지원:
+
+```python
+from nero_mem import AsyncMemoryClient
+
+async with AsyncMemoryClient("http://localhost:3030") as client:
+    results = await client.recall("이전에 논의한 인증 방식은?")
+```
+
+## 테스트
+
+```bash
+npm test              # 전체 테스트 실행
+npm run test:watch    # watch 모드
+```
+
+## 프로젝트 구조
+
+```
+src/
+├── api/            REST API (Hono 프레임워크)
+│   └── middleware/  인증, rate limiting, 맥락 주입
+├── db/             SQLite 저장소 (better-sqlite3)
+├── extraction/     LLM 기반 Fact/Episode/Concept 추출
+├── models/         데이터 모델 & 타입 정의
+├── proxy/          LLM API 프록시 미들웨어
+├── retrieval/      Dual-path retrieval (벡터 + 그래프)
+├── scoring/        Hebbian 가중치 & decay 계산
+├── services/       파이프라인 오케스트레이션
+└── events/         이벤트 버스
+
+tests/              40+ 테스트 파일
+sdk/python/         Python SDK 클라이언트
+```
+
+## 기술 스택
+
+- **Runtime**: Node.js (TypeScript, ESM)
+- **DB**: SQLite (better-sqlite3) - 외부 DB 서버 불필요
+- **API**: Hono
+- **Test**: Vitest
+- **기억 추출**: LLM API (교체 가능한 provider 인터페이스)
+
+## 환경 변수
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `NERO_PROXY_PORT` | `8420` | 프록시 서버 포트 |
+| `NERO_PROXY_TARGET_URL` | `https://api.anthropic.com` | 업스트림 LLM API URL |
+| `NERO_PROXY_API_KEY` | - | 업스트림 API 키 |
+| `NERO_PROXY_INJECTION` | `on` | 메모리 주입 on/off |
+| `NERO_PROXY_DB_PATH` | `~/.nero-mem/nero.db` | SQLite DB 경로 |
+| `NERO_PROXY_MAX_MEMORIES` | `10` | 요청당 최대 주입 기억 수 |
+| `NERO_PROXY_LOG_LEVEL` | `info` | 로그 레벨 |
+
+## License
+
+ISC
