@@ -11,6 +11,8 @@ import { CREATE_GRAPH_TABLES } from './graph-schema.js';
 import { CREATE_ANCHOR_TABLES } from './anchor-schema.js';
 import { CREATE_CO_RETRIEVAL_TABLES } from './co-retrieval-schema.js';
 import { CREATE_MEMORY_EMBEDDING_TABLES } from './memory-embedding-schema.js';
+import { CREATE_SYSTEM_STATE_TABLE } from './system-state-schema.js';
+import { CREATE_MEMORY_NODE_TABLES } from './memory-node-schema.js';
 
 export interface DatabaseOptions {
   /** Path to the SQLite database file. Defaults to ~/.nero-mem/nero.db */
@@ -51,6 +53,8 @@ export function createDatabase(options: DatabaseOptions = {}): Database.Database
   db.exec(CREATE_ANCHOR_TABLES);
   db.exec(CREATE_CO_RETRIEVAL_TABLES);
   db.exec(CREATE_MEMORY_EMBEDDING_TABLES);
+  db.exec(CREATE_SYSTEM_STATE_TABLE);
+  db.exec(CREATE_MEMORY_NODE_TABLES);
 
   // Check/set schema version and run migrations
   const versionRow = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined;

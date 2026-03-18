@@ -90,3 +90,38 @@ export {
   createCombinedPolicy,
   createNoDecayPolicy,
 } from './decay-policy.js';
+
+export {
+  // Pure functions
+  computeEffectiveShield,
+  computeEffectiveWeight,
+  evaluateLazyDecay,
+  evaluateLazyDecayBatch,
+  materializeLazyDecay,
+  // Class
+  LazyDecayEvaluator,
+  // Constants
+  DEFAULT_SHIELD_DECAY_RATE,
+  DEFAULT_LAZY_DECAY_CONFIG,
+  // Types
+  type LazyDecayInput,
+  type LazyDecayResult,
+  type LazyDecayConfig,
+} from './lazy-decay-evaluator.js';
+
+export {
+  // Pure simulation functions
+  simulateEdgeDecay,
+  simulateBatchDecay,
+  projectDeathEvent,
+  projectShieldDepletionEvent,
+  // Class
+  DecaySimulator,
+  // Constants
+  DEFAULT_SIMULATION_PARAMS,
+  // Types
+  type DecaySimulationParams,
+  type DecaySnapshot,
+  type DecaySimulationResult,
+  type BatchDecaySimulationResult,
+} from './decay-simulator.js';

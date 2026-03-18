@@ -35,6 +35,7 @@ import {
 import type { ScoredMemoryItem } from './types.js';
 import type { AnchorDecayConfig } from '../scoring/anchor-decay.js';
 import type { LLMProvider } from '../extraction/llm-provider.js';
+import { ProgressiveDepthEnricher, type EnrichmentStats } from './progressive-depth-enricher.js';
 import {
   BFSExpander,
   type BFSExpanderConfig,
@@ -83,6 +84,13 @@ export interface UnifiedRecallQuery {
   text: string;
   /** Override retriever config for this query */
   config?: Partial<UnifiedRetrieverConfig>;
+  /**
+   * Progressive depth parameter: top deepK nodes are enriched to L2 (summary + metadata),
+   * remaining nodes are enriched to L1 (metadata only).
+   * If 0 or undefined, no progressive depth enrichment is applied.
+   * Default: 0 (no enrichment)
+   */
+  deepK?: number;
 }
 
 export interface UnifiedRecallResult {
@@ -127,6 +135,8 @@ export interface UnifiedRecallDiagnostics {
   llmRerankStats?: LLMRerankStats;
   /** BFS expansion stats (if performed) */
   bfsExpansionStats?: BFSExpansionStats;
+  /** Progressive depth enrichment stats (if deepK was applied) */
+  enrichmentStats?: EnrichmentStats;
   /** Pipeline stages for traceability */
   stages: PipelineStage[];
 }
@@ -159,6 +169,7 @@ export class UnifiedRetriever {
   private graphReranker: ReRanker;
   private llmReranker?: LLMReranker;
   private bfsExpander: BFSExpander;
+  private depthEnricher: ProgressiveDepthEnricher;
 
   constructor(
     db: Database.Database,
@@ -183,6 +194,9 @@ export class UnifiedRetriever {
 
     // Initialize BFS expander for post-rerank associative expansion
     this.bfsExpander = new BFSExpander(db, this.config.bfsExpander);
+
+    // Initialize progressive depth enricher
+    this.depthEnricher = new ProgressiveDepthEnricher(db);
 
     // Initialize LLM re-ranker if provider is supplied
     if (llmProvider) {
@@ -518,6 +532,29 @@ export class UnifiedRetriever {
       this.traceHook?.({ stage: 'reinforce', status: 'skipped' });
     }
 
+    // ── Stage 6: Progressive depth enrichment ──
+    let enrichmentStats: EnrichmentStats | undefined;
+
+    if (query.deepK && query.deepK > 0 && items.length > 0) {
+      const enrichResult = this.depthEnricher.enrichScoredItems(items, query.deepK);
+      items = enrichResult.items;
+      enrichmentStats = enrichResult.stats;
+
+      stages.push({
+        name: 'progressive_depth',
+        status: 'complete',
+        durationMs: enrichResult.stats.enrichTimeMs,
+        detail: `deepK=${query.deepK}: ${enrichResult.stats.l2Count} L2 + ${enrichResult.stats.l1Count} L1`,
+      });
+    } else {
+      stages.push({
+        name: 'progressive_depth',
+        status: 'skipped',
+        durationMs: 0,
+        detail: !query.deepK ? 'No deepK specified' : 'No items to enrich',
+      });
+    }
+
     const totalTimeMs = round2(performance.now() - totalStart);
 
     this.traceHook?.({
@@ -529,6 +566,7 @@ export class UnifiedRetriever {
         anchorsMatched: vectorResult.matchedAnchors.length,
         reranked: config.enableReranking,
         llmReranked: !!this.llmReranker,
+        deepK: query.deepK,
       },
     });
 
@@ -552,6 +590,7 @@ export class UnifiedRetriever {
         rerankStats,
         llmRerankStats,
         bfsExpansionStats,
+        enrichmentStats,
         stages,
       },
     };

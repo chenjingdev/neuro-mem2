@@ -340,8 +340,8 @@ describe('GraphPersistence', () => {
         learningRate: 0.5,
       });
 
-      // w_new = 0.5 + 0.5 * (1 - 0.5) = 0.75
-      expect(reinforcement!.newWeight).toBeCloseTo(0.75);
+      // New formula: delta = 0.5 * 100 * ((100-0.5)/100) = 49.75; w_new = 50.25
+      expect(reinforcement!.newWeight).toBeCloseTo(50.25, 1);
     });
   });
 

@@ -22,21 +22,17 @@ CREATE TABLE IF NOT EXISTS raw_conversations (
   metadata TEXT  -- JSON string
 );
 
--- Raw messages (immutable, append-only)
+-- Raw messages (immutable, append-only) — turn-based composite PK
 CREATE TABLE IF NOT EXISTS raw_messages (
-  id TEXT PRIMARY KEY NOT NULL,
   conversation_id TEXT NOT NULL,
+  turn_index INTEGER NOT NULL,
   role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
   content TEXT NOT NULL,
-  turn_index INTEGER NOT NULL,
   created_at TEXT NOT NULL,
   metadata TEXT,  -- JSON string
+  PRIMARY KEY (conversation_id, turn_index),
   FOREIGN KEY (conversation_id) REFERENCES raw_conversations(id)
 );
-
--- Indexes for efficient querying
-CREATE INDEX IF NOT EXISTS idx_raw_messages_conversation
-  ON raw_messages(conversation_id, turn_index);
 
 CREATE INDEX IF NOT EXISTS idx_raw_conversations_source
   ON raw_conversations(source);

@@ -484,34 +484,38 @@ describe('Anchor & WeightedEdge Models', () => {
 
       expect(result).not.toBeNull();
       expect(result!.previousWeight).toBe(0.5);
-      // w_new = 0.5 + 0.1 * (1 - 0.5) = 0.5 + 0.05 = 0.55
-      expect(result!.newWeight).toBeCloseTo(0.55);
+      // New formula: w_new = w_old + lr * WEIGHT_CAP * headroom
+      // headroom = (100 - 0.5) / 100 = 0.995
+      // delta = 0.1 * 100 * 0.995 = 9.95
+      // w_new = 0.5 + 9.95 = 10.45
+      expect(result!.newWeight).toBeCloseTo(10.45, 1);
       expect(result!.activationCount).toBe(1);
 
       // Verify persisted
       const edge = weightedEdgeRepo.getEdge(edgeId);
-      expect(edge!.weight).toBeCloseTo(0.55);
+      expect(edge!.weight).toBeCloseTo(10.45, 1);
       expect(edge!.activationCount).toBe(1);
       expect(edge!.lastActivatedAt).toBeDefined();
     });
 
-    it('should approach 1.0 asymptotically with repeated reinforcement', () => {
+    it('should approach WEIGHT_CAP asymptotically with repeated reinforcement', () => {
       let weight = 0.5;
       for (let i = 0; i < 20; i++) {
         const result = weightedEdgeRepo.reinforceEdge(edgeId);
         weight = result!.newWeight;
       }
 
-      // After 20 reinforcements, should be close to 1.0 but not exactly 1.0
-      expect(weight).toBeGreaterThan(0.85);
-      expect(weight).toBeLessThanOrEqual(1.0);
+      // After 20 reinforcements, should approach WEIGHT_CAP (100)
+      expect(weight).toBeGreaterThan(85);
+      expect(weight).toBeLessThanOrEqual(100);
     });
 
     it('should allow override learning rate', () => {
       const result = weightedEdgeRepo.reinforceEdge(edgeId, 0.5);
 
-      // w_new = 0.5 + 0.5 * (1 - 0.5) = 0.5 + 0.25 = 0.75
-      expect(result!.newWeight).toBeCloseTo(0.75);
+      // New formula: delta = 0.5 * 100 * ((100 - 0.5) / 100) = 49.75
+      // w_new = 0.5 + 49.75 = 50.25
+      expect(result!.newWeight).toBeCloseTo(50.25, 1);
     });
 
     it('should return null for non-existent edge', () => {
@@ -540,41 +544,43 @@ describe('Anchor & WeightedEdge Models', () => {
   // ── Weight Decay ──
 
   describe('Weight decay', () => {
-    it('should apply decay to all edges', () => {
+    it('should apply event-based decay to all edges', () => {
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8, decayRate: 0.1,
+        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.5, currentEvent: 0,
       });
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5, decayRate: 0.1,
+        edgeType: 'anchor_to_fact', weight: 50, decayRate: 0.5, currentEvent: 0,
       });
 
-      const result = weightedEdgeRepo.applyDecay();
+      // 10 events pass: decayAmount = 0.5 * 10 = 5
+      const result = weightedEdgeRepo.applyDecay({ currentEvent: 10 });
       expect(result.decayedCount).toBe(2);
 
-      // Verify weights decreased: w * (1 - 0.1) = w * 0.9
+      // Verify weights decreased by decayAmount (shield was 0)
       const edges = weightedEdgeRepo.getOutgoingEdges('a1');
-      expect(edges[0].weight).toBeCloseTo(0.72); // 0.8 * 0.9
-      expect(edges[1].weight).toBeCloseTo(0.45); // 0.5 * 0.9
+      expect(edges[0].weight).toBeCloseTo(75); // 80 - 5
+      expect(edges[1].weight).toBeCloseTo(45); // 50 - 5
     });
 
     it('should prune edges below threshold', () => {
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8, decayRate: 0.1,
+        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.1, currentEvent: 0,
       });
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.05, decayRate: 0.5,
+        edgeType: 'anchor_to_fact', weight: 5, decayRate: 1.0, currentEvent: 0,
       });
 
-      const result = weightedEdgeRepo.applyDecay({ pruneBelow: 0.03 });
-      expect(result.prunedCount).toBe(1); // 0.05 * 0.5 = 0.025 < 0.03
+      // 10 events: edge2 decayAmount = 1.0 * 10 = 10 → weight = 5 - 10 → 0
+      const result = weightedEdgeRepo.applyDecay({ currentEvent: 10, pruneBelow: 1 });
+      expect(result.prunedCount).toBe(1);
       expect(weightedEdgeRepo.countEdges()).toBe(1);
     });
 
@@ -582,13 +588,13 @@ describe('Anchor & WeightedEdge Models', () => {
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8, decayRate: 0.0,
+        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.0, currentEvent: 0,
       });
 
-      weightedEdgeRepo.applyDecay();
+      weightedEdgeRepo.applyDecay({ currentEvent: 10 });
 
       const edge = weightedEdgeRepo.getOutgoingEdges('a1')[0];
-      expect(edge.weight).toBeCloseTo(0.8); // Unchanged
+      expect(edge.weight).toBeCloseTo(80); // Unchanged
     });
   });
 
@@ -695,10 +701,10 @@ describe('Anchor & WeightedEdge Models', () => {
       expect(() => {
         db.prepare(`
           INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
-            edge_type, weight, initial_weight, learning_rate, decay_rate,
-            activation_count, created_at, updated_at)
+            edge_type, weight, initial_weight, shield, learning_rate, decay_rate,
+            activation_count, last_activated_at_event, created_at, updated_at)
           VALUES ('x', 'a', 'anchor', 'b', 'fact', 'anchor_to_fact',
-            1.5, 0.5, 0.1, 0.01, 0, '2024-01-01', '2024-01-01')
+            150, 0.5, 0, 0.1, 0.01, 0, 0, '2024-01-01', '2024-01-01')
         `).run();
       }).toThrow();
     });

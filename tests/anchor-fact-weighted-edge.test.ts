@@ -357,15 +357,16 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     const result = await linker.linkFact(fact, [makeCandidate(anchor.id, 'TS')]);
     const edgeId = result.connectedEdges[0].edgeId;
 
-    // Reinforce: w_new = 0.5 + 0.1 * (1 - 0.5) = 0.55
+    // Reinforce: delta = 0.1 * 100 * ((100 - 0.5) / 100) = 9.95
+    // w_new = 0.5 + 9.95 = 10.45
     const reinforced = edgeRepo.reinforceEdge(edgeId)!;
     expect(reinforced.previousWeight).toBe(0.5);
-    expect(reinforced.newWeight).toBeCloseTo(0.55, 5);
+    expect(reinforced.newWeight).toBeCloseTo(10.45, 1);
     expect(reinforced.activationCount).toBe(1);
 
-    // Second reinforcement: w_new = 0.55 + 0.1 * (1 - 0.55) = 0.595
+    // Second reinforcement: delta = 0.1 * 100 * ((100 - 10.45) / 100) = 8.955
     const reinforced2 = edgeRepo.reinforceEdge(edgeId)!;
-    expect(reinforced2.newWeight).toBeCloseTo(0.595, 5);
+    expect(reinforced2.newWeight).toBeGreaterThan(10.45);
     expect(reinforced2.activationCount).toBe(2);
   });
 

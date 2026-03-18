@@ -52,3 +52,21 @@ export {
   type AnchorJudgmentConfig,
   type AnchorJudgmentResult,
 } from './anchor-judgment.js';
+export {
+  EntityHubLinker,
+  DEFAULT_ENTITY_HUB_LINKER_CONFIG,
+  type EntityHubLinkerConfig,
+  type EntityResolution,
+  type NodeLinkResult,
+  type EntityHubLinkResult,
+  type EntityHubLinkStats,
+} from './entity-hub-linker.js';
+export {
+  HubMatcher,
+  DEFAULT_HUB_MATCHER_CONFIG,
+  normalizeFtsRanks,
+  type HubMatcherConfig,
+  type HubMatch,
+  type HubMatchResult,
+  type HubMatchStats,
+} from './hub-matcher.js';

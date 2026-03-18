@@ -105,12 +105,17 @@ export interface FormattedMemoryContext {
 interface EnrichedItem {
   nodeId: string;
   nodeType: string;
+  nodeRole?: string;
   score: number;
   source: string;
   content: string;
   frontmatter?: string;
   summary?: string;
   category?: string;
+  /** Progressive depth level (L0/L1/L2/L3) */
+  depthLevel: string;
+  /** L1 structured metadata */
+  nodeMetadata?: Record<string, unknown>;
   /** Anchor labels that led to this item */
   viaAnchors: string[];
   /** Whether this item was found via BFS expansion */
@@ -361,15 +366,23 @@ function enrichItems(
 
     const bfsExpanded = meta.bfsExpanded === true;
 
+    // Extract progressive depth data
+    const depthLevel = item.depthLevel ?? 'L2';
+    const nodeMetadata = item.nodeMetadata as Record<string, unknown> | undefined;
+    const nodeRole = typeof meta.nodeRole === 'string' ? meta.nodeRole : undefined;
+
     return {
       nodeId: item.nodeId,
       nodeType: item.nodeType,
+      nodeRole,
       score: item.score,
       source: item.source,
       content: item.content,
       frontmatter,
       summary,
       category,
+      depthLevel,
+      nodeMetadata,
       viaAnchors,
       bfsExpanded,
     };
@@ -399,13 +412,51 @@ function resolveDetailLevel(
 }
 
 /**
- * Get the appropriate display content for an item based on detail level.
- * Falls back to the next available level if the requested one is missing.
+ * Get the appropriate display content for an item based on detail level
+ * and its progressive depth (L0/L1/L2/L3).
+ *
+ * Progressive depth governs what data is *available* on the item:
+ *   L0 → only frontmatter
+ *   L1 → frontmatter + metadata
+ *   L2 → frontmatter + metadata + summary
+ *   L3 → full content + source references
+ *
+ * Detail level governs what we *show*:
+ *   'frontmatter' → always show just frontmatter
+ *   'summary' → show summary (fall back to frontmatter)
+ *   'full' → show full content
+ *
+ * The effective display is min(detailLevel, depthLevel).
  */
 function getDisplayContent(
   item: EnrichedItem,
   level: Exclude<DetailLevel, 'adaptive'>,
 ): string {
+  const depth = item.depthLevel;
+
+  // If depth is L0, we can only show frontmatter regardless of detail level
+  if (depth === 'L0') {
+    return item.frontmatter ?? item.content;
+  }
+
+  // If depth is L1, we can show frontmatter + metadata inline, but not summary
+  if (depth === 'L1') {
+    const fm = item.frontmatter ?? item.content;
+    if (level === 'frontmatter') return fm;
+    // For summary/full with L1 depth, show frontmatter + metadata inline
+    if (item.nodeMetadata) {
+      const metaParts: string[] = [];
+      const meta = item.nodeMetadata;
+      if (meta.category) metaParts.push(String(meta.category));
+      if (meta.entities && Array.isArray(meta.entities) && meta.entities.length > 0) {
+        metaParts.push(`entities: ${meta.entities.join(', ')}`);
+      }
+      if (metaParts.length > 0) return `${fm} (${metaParts.join('; ')})`;
+    }
+    return fm;
+  }
+
+  // Depth L2/L3: full progressive depth available, use detail level
   switch (level) {
     case 'frontmatter':
       return item.frontmatter ?? item.summary ?? item.content;
@@ -531,12 +582,13 @@ function formatMarkdown(
   for (const [groupName, groupItems] of Object.entries(grouped)) {
     if (groupItems.length === 0) continue;
 
-    lines.push(`### ${capitalize(groupName)}`);
+    lines.push(`### ${groupDisplayName(groupName)}`);
     for (const item of groupItems) {
       const displayContent = getDisplayContent(item, detailLevel);
       let line = `- ${displayContent}`;
 
       const suffixes: string[] = [];
+      suffixes.push(item.depthLevel);
       if (cfg.includeScores) suffixes.push(`score: ${item.score.toFixed(3)}`);
       if (cfg.includeSources) suffixes.push(item.bfsExpanded ? 'via BFS' : item.source);
       if (cfg.includeAnchors && item.viaAnchors.length > 0) {
@@ -584,7 +636,7 @@ function formatPlain(
     const displayContent = getDisplayContent(item, detailLevel);
     const typeLabel = capitalize(item.nodeType);
 
-    let line = `[${i + 1}] (${typeLabel}) ${displayContent}`;
+    let line = `[${i + 1}] (${typeLabel}/${item.depthLevel}) ${displayContent}`;
 
     if (cfg.includeScores) line += ` [${(item.score * 100).toFixed(0)}%]`;
     if (cfg.includeAnchors && item.viaAnchors.length > 0) {
@@ -599,38 +651,73 @@ function formatPlain(
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
+/**
+ * Group by MemoryNode nodeType (4-layer model).
+ * Hub nodes are identified by nodeRole in retrievalMetadata.
+ */
 function groupByType(items: EnrichedItem[]): Record<string, EnrichedItem[]> {
   const groups: Record<string, EnrichedItem[]> = {
-    facts: [],
-    episodes: [],
-    concepts: [],
+    semantic: [],
+    episodic: [],
+    procedural: [],
+    prospective: [],
+    emotional: [],
+    hub: [],
     other: [],
   };
 
   for (const item of items) {
+    // Check if this is a hub node (by nodeRole in metadata or bfs context)
+    if (item.nodeType === 'hub' || item.nodeRole === 'hub') {
+      groups.hub.push(item);
+      continue;
+    }
+
     switch (item.nodeType) {
-      case 'fact': groups.facts.push(item); break;
-      case 'episode': groups.episodes.push(item); break;
-      case 'concept': groups.concepts.push(item); break;
-      default: groups.other.push(item); break;
+      case 'semantic':    groups.semantic.push(item); break;
+      case 'episodic':    groups.episodic.push(item); break;
+      case 'procedural':  groups.procedural.push(item); break;
+      case 'prospective': groups.prospective.push(item); break;
+      case 'emotional':   groups.emotional.push(item); break;
+      default:            groups.other.push(item); break;
     }
   }
 
   return groups;
 }
 
+/** Display name for progressive depth node type groups */
+function groupDisplayName(groupName: string): string {
+  switch (groupName) {
+    case 'semantic':    return 'Semantic Knowledge';
+    case 'episodic':    return 'Episodes';
+    case 'procedural':  return 'Procedures';
+    case 'prospective': return 'Plans & Intentions';
+    case 'emotional':   return 'Emotional Context';
+    case 'hub':         return 'Key Concepts (Hubs)';
+    case 'other':       return 'Other';
+    default:            return capitalize(groupName);
+  }
+}
+
 function singularTag(groupName: string): string {
   switch (groupName) {
-    case 'facts': return 'fact';
-    case 'episodes': return 'episode';
-    case 'concepts': return 'concept';
-    case 'other': return 'memory';
-    default: return 'item';
+    case 'semantic':    return 'knowledge';
+    case 'episodic':    return 'episode';
+    case 'procedural':  return 'procedure';
+    case 'prospective': return 'plan';
+    case 'emotional':   return 'emotion';
+    case 'hub':         return 'hub';
+    case 'other':       return 'memory';
+    default:            return 'item';
   }
 }
 
 function buildItemAttrs(item: EnrichedItem, cfg: MemoryContextFormatterConfig): string[] {
   const attrs: string[] = [];
+  // Always include depth level for progressive depth visibility
+  const depth = (item as unknown as Record<string, unknown>)['depthLevel'] ?? 'L2';
+  attrs.push(`depth="${depth}"`);
   if (cfg.includeScores) attrs.push(`score="${item.score.toFixed(3)}"`);
   if (cfg.includeSources) attrs.push(`source="${item.bfsExpanded ? 'bfs' : item.source}"`);
   if (item.category) attrs.push(`category="${escapeXml(item.category)}"`);

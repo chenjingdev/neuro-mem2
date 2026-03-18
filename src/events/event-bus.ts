@@ -22,7 +22,7 @@ export interface TurnCompletedEvent {
 export interface FactsExtractedEvent {
   type: 'facts.extracted';
   conversationId: string;
-  sourceMessageId: string;
+  sourceTurnIndex: number;
   facts: Fact[];
   timestamp: string;
 }
@@ -31,7 +31,7 @@ export interface FactsExtractedEvent {
 export interface ExtractionErrorEvent {
   type: 'extraction.error';
   conversationId: string;
-  sourceMessageId: string;
+  sourceTurnIndex: number;
   error: string;
   timestamp: string;
 }
@@ -86,6 +86,29 @@ export interface DecayErrorEvent {
   timestamp: string;
 }
 
+/** Emitted after a retrieval (recall) operation completes */
+export interface RetrievalCompletedEvent {
+  type: 'retrieval.completed';
+  queryText: string;
+  resultCount: number;
+  totalTimeMs: number;
+  timestamp: string;
+}
+
+/** Emitted after memory nodes are successfully extracted from a turn */
+export interface MemoryNodesExtractedEvent {
+  type: 'memory-nodes.extracted';
+  conversationId: string;
+  sourceTurnIndex: number;
+  /** Number of nodes extracted */
+  nodeCount: number;
+  /** IDs of the created memory nodes */
+  nodeIds: string[];
+  /** Node types extracted (for monitoring) */
+  nodeTypes: string[];
+  timestamp: string;
+}
+
 export type MemoryEvent =
   | TurnCompletedEvent
   | FactsExtractedEvent
@@ -95,7 +118,9 @@ export type MemoryEvent =
   | BatchJobCompletedEvent
   | BatchJobFailedEvent
   | DecayCompletedEvent
-  | DecayErrorEvent;
+  | DecayErrorEvent
+  | RetrievalCompletedEvent
+  | MemoryNodesExtractedEvent;
 
 export type EventHandler<T extends MemoryEvent = MemoryEvent> = (event: T) => void | Promise<void>;
 

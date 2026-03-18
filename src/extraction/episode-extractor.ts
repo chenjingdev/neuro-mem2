@@ -94,10 +94,11 @@ export class EpisodeExtractor {
         };
       }
 
-      // Build turn index -> message ID lookup
-      const turnToMessageId = new Map<number, string>();
+      // Build set of existing turn indices for this conversation
+      const existingTurns = new Set<number>();
       for (const msg of conversation.messages) {
-        turnToMessageId.set(msg.turnIndex, msg.id);
+        // Track which turn indices exist for this conversation
+        existingTurns.add(msg.turnIndex);
       }
 
       // Convert to Episode instances
@@ -105,11 +106,10 @@ export class EpisodeExtractor {
       const episodes: Episode[] = parseResult.episodes
         .slice(0, maxEpisodes)
         .map((raw) => {
-          // Collect source message IDs for the turn range
+          // Collect source turn refs for the turn range (conversationId:turnIndex format)
           const sourceMessageIds: string[] = [];
           for (let t = raw.startTurnIndex; t <= raw.endTurnIndex; t++) {
-            const msgId = turnToMessageId.get(t);
-            if (msgId) sourceMessageIds.push(msgId);
+            if (existingTurns.has(t)) sourceMessageIds.push(`${conversationId}:${t}`);
           }
 
           return {

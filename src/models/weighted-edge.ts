@@ -1,55 +1,83 @@
 /**
- * WeightedEdge models — enhanced graph edges for the dual-path retrieval system.
+ * WeightedEdge models — enhanced graph edges for the MemoryNode retrieval system.
  *
- * WeightedEdges connect Anchors to memory nodes (facts, episodes, concepts)
- * or to other Anchors. They carry Hebbian learning parameters that evolve
- * through co-activation during retrieval:
+ * WeightedEdges connect MemoryNodes (hub/leaf) with Hebbian learning parameters
+ * that evolve through co-activation during retrieval:
  *
- * - When an anchor and a memory node are retrieved together, their connecting
- *   edge weight is reinforced (Hebbian rule).
- * - Over time, unused edges decay, enabling natural forgetting.
- * - The retrieval system uses these weights to rank graph-path results.
+ * - When nodes are co-activated, the connecting edge weight is reinforced.
+ * - Overflow above weight cap (100) charges shield + baseShieldGain.
+ * - Shield absorbs decay before weight is reduced.
+ * - lastActivatedAtEvent tracks the global event counter for lazy decay.
+ *
+ * Caps:
+ *   - Weight cap: 100 (hard ceiling)
+ *   - Shield cap: baseShieldCap(50) + importance * salienceMultiplier(50)
+ *     where importance is derived from connected node importance (0-1)
  */
 
-import type { MemoryNodeType, EdgeType } from './memory-edge.js';
-import type { AnchorType } from './anchor.js';
+// ─── Constants ───────────────────────────────────────────────────
 
-// ─── Extended Node Type ───────────────────────────────────────────
+/** Hard ceiling for edge weight */
+export const WEIGHT_CAP = 100;
+
+/** Base shield capacity before importance scaling */
+export const BASE_SHIELD_CAP = 50;
+
+/** Multiplier applied to node importance for additional shield capacity */
+export const SALIENCE_MULTIPLIER = 50;
+
+/** Base shield gain when weight overflows cap (always added on overflow) */
+export const BASE_SHIELD_GAIN = 1.0;
 
 /**
- * Extended node type that includes 'anchor' alongside existing memory node types.
- * Used in WeightedEdge endpoints to allow anchor-to-node and anchor-to-anchor edges.
+ * Compute dynamic shield cap for an edge.
+ * shieldCap = baseShieldCap(50) + importance * salienceMultiplier(50)
+ * @param importance - Node importance score [0, 1]
  */
-export type WeightedNodeType = MemoryNodeType | 'anchor';
+export function computeShieldCap(importance: number): number {
+  const clamped = Math.max(0, Math.min(1, importance));
+  return BASE_SHIELD_CAP + clamped * SALIENCE_MULTIPLIER;
+}
+
+// ─── Node Type for Edge Endpoints ─────────────────────────────────
+
+/**
+ * Node type for weighted edge endpoints.
+ * Uses MemoryNode roles: 'hub' and 'leaf'.
+ */
+export type WeightedNodeType = 'hub' | 'leaf';
 
 // ─── WeightedEdge Relationship Types ──────────────────────────────
 
 /**
- * Relationship types for weighted edges in the retrieval graph.
- * Extends EdgeType with anchor-specific relationships.
+ * Relationship types for weighted edges in the MemoryNode graph.
+ *
+ * These 6 semantic edge types replace the old entity-specific types
+ * (episode_mentions_concept, anchor_to_fact, etc.) with universal
+ * relationship semantics applicable to any MemoryNode pair:
+ *
+ * - about:       Node A is about/describes Node B (topic association)
+ * - related:     Nodes are semantically related (general association)
+ * - caused:      Node A caused/triggered Node B (causal relationship)
+ * - precedes:    Node A temporally/logically precedes Node B (ordering)
+ * - refines:     Node A refines/elaborates Node B (specialization)
+ * - contradicts: Node A contradicts/conflicts with Node B (opposition)
  */
 export type WeightedEdgeType =
-  | EdgeType                       // All existing edge types
-  | 'anchor_to_fact'               // Anchor activates a fact
-  | 'anchor_to_episode'            // Anchor activates an episode
-  | 'anchor_to_concept'            // Anchor activates a concept
-  | 'anchor_to_anchor'             // Inter-anchor association
-  | 'query_activated';             // Dynamic edge from query to anchor
+  | 'about'        // Topic association: A is about B
+  | 'related'      // General semantic association
+  | 'caused'       // Causal: A caused/triggered B
+  | 'precedes'     // Temporal/logical ordering: A precedes B
+  | 'refines'      // Specialization: A refines/elaborates B
+  | 'contradicts'; // Opposition: A contradicts B
 
 export const WEIGHTED_EDGE_TYPES: readonly WeightedEdgeType[] = [
-  // Existing EdgeType values
-  'episode_mentions_concept',
-  'concept_related_to',
-  'fact_supports_concept',
-  'episode_contains_fact',
-  'temporal_next',
-  'derived_from',
-  // Anchor-specific
-  'anchor_to_fact',
-  'anchor_to_episode',
-  'anchor_to_concept',
-  'anchor_to_anchor',
-  'query_activated',
+  'about',
+  'related',
+  'caused',
+  'precedes',
+  'refines',
+  'contradicts',
 ] as const;
 
 // ─── WeightedEdge Model ──────────────────────────────────────────
@@ -77,15 +105,23 @@ export interface WeightedEdge {
   edgeType: WeightedEdgeType;
 
   // ── Hebbian Weight ──
-  /** Current Hebbian weight (0-1): strength of co-activation */
+  /** Current Hebbian weight [0, WEIGHT_CAP(100)]: strength of co-activation */
   weight: number;
   /** Initial weight at creation (for baseline comparison) */
   initialWeight: number;
 
+  // ── Shield (decay buffer) ──
+  /**
+   * Shield absorbs decay before weight is reduced.
+   * Charged when weight overflows WEIGHT_CAP.
+   * Dynamic cap: baseShieldCap(50) + importance * salienceMultiplier(50)
+   */
+  shield: number;
+
   // ── Learning Parameters ──
   /** Learning rate for Hebbian reinforcement (default 0.1) */
   learningRate: number;
-  /** Decay rate per time unit (default 0.01) — applied during periodic maintenance */
+  /** Decay rate per event unit (default 0.01) — applied lazily on access */
   decayRate: number;
 
   // ── Activation Tracking ──
@@ -93,6 +129,11 @@ export interface WeightedEdge {
   activationCount: number;
   /** ISO 8601 timestamp of last co-activation */
   lastActivatedAt?: string;
+  /**
+   * Global event counter value when this edge was last activated.
+   * Used for lazy event-based decay: decayAmount = decayRate * (currentEvent - lastActivatedAtEvent)
+   */
+  lastActivatedAtEvent: number;
 
   // ── Timestamps ──
   /** ISO 8601 timestamp of creation */
@@ -114,12 +155,18 @@ export interface CreateWeightedEdgeInput {
   targetId: string;
   targetType: WeightedNodeType;
   edgeType: WeightedEdgeType;
-  /** Initial weight (default 0.5) */
+  /** Initial weight (default 0.5, cap 100) */
   weight?: number;
+  /** Initial shield value (default 0) */
+  shield?: number;
   /** Learning rate (default 0.1) */
   learningRate?: number;
-  /** Decay rate (default 0.01) */
+  /** Decay rate per event (default 0.01) */
   decayRate?: number;
+  /** Current global event counter value for lastActivatedAtEvent */
+  currentEvent?: number;
+  /** Importance of connected node [0,1] for shield cap computation */
+  importance?: number;
   /** Optional metadata */
   metadata?: Record<string, unknown>;
 }
@@ -138,6 +185,10 @@ export interface ReinforceEdgeInput {
   learningRate?: number;
   /** Optional context about what triggered this co-activation */
   activationContext?: string;
+  /** Current global event counter value */
+  currentEvent?: number;
+  /** Importance of connected node [0,1] for shield cap */
+  importance?: number;
 }
 
 /**
@@ -160,7 +211,10 @@ export interface ReinforceResult {
   edgeId: string;
   previousWeight: number;
   newWeight: number;
+  previousShield: number;
+  newShield: number;
   activationCount: number;
+  lastActivatedAtEvent: number;
 }
 
 /**
@@ -198,5 +252,7 @@ export interface WeightedEdgeRef {
   targetType: WeightedNodeType;
   edgeType: WeightedEdgeType;
   weight: number;
+  shield: number;
   activationCount: number;
+  lastActivatedAtEvent: number;
 }

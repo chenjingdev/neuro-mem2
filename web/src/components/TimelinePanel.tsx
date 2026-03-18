@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import type { TraceEvent } from '../types';
-import type { StageEntry, StageStatus } from '../types/timeline';
+import type { StageEntry, StageStatus, DepthLayer } from '../types/timeline';
 import {
   PIPELINE_STAGE_ORDER,
   TOP_LEVEL_STAGES,
@@ -8,9 +8,15 @@ import {
   BATCH_SUB_STAGES,
   STATUS_ICONS,
   STATUS_CLASSES,
+  DEPTH_LAYER_LABELS,
+  DEPTH_LAYER_COLORS,
+  DEPTH_LAYER_BG,
+  DEPTH_LAYER_BORDER,
+  DEPTH_LAYER_ICONS,
   getStageColor,
   getStageLabel,
   getStageOrder,
+  getStageDepthLayer,
   formatDuration,
 } from '../types/timeline';
 
@@ -39,6 +45,7 @@ function aggregateStages(traces: TraceEvent[]): StageEntry[] {
           : BATCH_SUB_STAGES.has(trace.stage) ? 'batch_extraction'
           : undefined,
         isTopLevel: TOP_LEVEL_STAGES.has(trace.stage),
+        depthLayer: getStageDepthLayer(trace.stage),
       });
     } else if (trace.status === 'complete') {
       const entry = existing ?? {
@@ -48,6 +55,7 @@ function aggregateStages(traces: TraceEvent[]): StageEntry[] {
           : BATCH_SUB_STAGES.has(trace.stage) ? 'batch_extraction'
           : undefined,
         isTopLevel: TOP_LEVEL_STAGES.has(trace.stage),
+        depthLayer: getStageDepthLayer(trace.stage),
       };
       stageMap.set(trace.stage, {
         ...entry,
@@ -64,6 +72,7 @@ function aggregateStages(traces: TraceEvent[]): StageEntry[] {
           : BATCH_SUB_STAGES.has(trace.stage) ? 'batch_extraction'
           : undefined,
         isTopLevel: TOP_LEVEL_STAGES.has(trace.stage),
+        depthLayer: getStageDepthLayer(trace.stage),
       };
       stageMap.set(trace.stage, {
         ...entry,
@@ -87,6 +96,7 @@ function aggregateStages(traces: TraceEvent[]): StageEntry[] {
           : BATCH_SUB_STAGES.has(trace.stage) ? 'batch_extraction'
           : undefined,
         isTopLevel: TOP_LEVEL_STAGES.has(trace.stage),
+        depthLayer: getStageDepthLayer(trace.stage),
       });
     }
   }
@@ -154,6 +164,23 @@ function DataSection({
   );
 }
 
+/** Depth layer badge for timeline stages. */
+function TlDepthLayerBadge({ layer }: { layer: DepthLayer }) {
+  return (
+    <span
+      className="tl-depth-badge"
+      style={{
+        color: DEPTH_LAYER_COLORS[layer],
+        backgroundColor: DEPTH_LAYER_BG[layer],
+        borderColor: DEPTH_LAYER_BORDER[layer],
+      }}
+      title={`Memory Depth: ${DEPTH_LAYER_LABELS[layer]}`}
+    >
+      {DEPTH_LAYER_ICONS[layer]} {DEPTH_LAYER_LABELS[layer]}
+    </span>
+  );
+}
+
 /** Single stage entry in the timeline. */
 function StageRow({
   entry,
@@ -171,17 +198,24 @@ function StageRow({
   const color = getStageColor(entry.stage);
   const statusClass = STATUS_CLASSES[entry.status as StageStatus] ?? '';
   const icon = STATUS_ICONS[entry.status as StageStatus] ?? '○';
+  const depthLayer = entry.depthLayer;
+  const dotColor = depthLayer ? DEPTH_LAYER_COLORS[depthLayer] : color;
 
   return (
     <div
-      className={`tl-stage-row ${statusClass} ${isNested ? 'tl-nested' : ''} ${isSelected ? 'tl-selected' : ''}`}
+      className={`tl-stage-row ${statusClass} ${isNested ? 'tl-nested' : ''} ${isSelected ? 'tl-selected' : ''}${depthLayer ? ` tl-depth-${depthLayer}` : ''}`}
       data-stage={entry.stage}
       data-status={entry.status}
+      data-depth-layer={depthLayer ?? undefined}
       onClick={(e) => { e.stopPropagation(); onSelect(entry.stage); }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(entry.stage); } }}
       aria-selected={isSelected}
+      style={depthLayer ? {
+        borderLeftColor: DEPTH_LAYER_BORDER[depthLayer],
+        backgroundColor: DEPTH_LAYER_BG[depthLayer],
+      } : undefined}
     >
       {/* Timeline connector */}
       <div className="tl-connector">
@@ -189,15 +223,15 @@ function StageRow({
         <div
           className="tl-dot"
           style={{
-            borderColor: color,
-            backgroundColor: entry.status === 'running' ? color : 'transparent',
+            borderColor: dotColor,
+            backgroundColor: entry.status === 'running' ? dotColor : 'transparent',
           }}
         >
-          <span className="tl-dot-icon" style={{ color }}>
+          <span className="tl-dot-icon" style={{ color: dotColor }}>
             {icon}
           </span>
         </div>
-        <div className="tl-line tl-line-bottom" />
+        <div className="tl-line tl-line-bottom" style={depthLayer ? { background: DEPTH_LAYER_BORDER[depthLayer] } : undefined} />
       </div>
 
       {/* Stage content */}
@@ -206,6 +240,7 @@ function StageRow({
           <span className="tl-stage-name" style={{ color }}>
             {getStageLabel(entry.stage)}
           </span>
+          {depthLayer && <TlDepthLayerBadge layer={depthLayer} />}
           <span className={`tl-status-badge ${statusClass}`}>
             {entry.status}
           </span>

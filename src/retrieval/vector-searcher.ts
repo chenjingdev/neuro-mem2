@@ -505,51 +505,12 @@ export class VectorSearcher {
   }
 }
 
-// ─── Pure Helper Functions (exported for testing) ─────────────────
+// ─── Re-exported from cosine-similarity module ───────────────────
 
-/**
- * Cosine similarity between two number arrays.
- * Returns value in [0, 1] (negative similarities clamped to 0).
- */
-export function cosineSimilarityVec(vecA: number[], vecB: number[] | Float32Array): number {
-  const minLen = Math.min(vecA.length, vecB.length);
-  if (minLen === 0) return 0;
-
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < minLen; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator === 0) return 0;
-
-  return Math.max(0, dotProduct / denominator);
-}
-
-/**
- * Convert a Buffer (BLOB from SQLite) to a Float32Array.
- */
-export function bufferToFloat32Array(
-  buffer: Buffer | null,
-  expectedDim: number | null,
-): Float32Array | null {
-  if (!buffer || !expectedDim || expectedDim <= 0) return null;
-
-  try {
-    return new Float32Array(
-      buffer.buffer,
-      buffer.byteOffset,
-      expectedDim,
-    );
-  } catch {
-    return null;
-  }
-}
+export {
+  cosineSimilarity as cosineSimilarityVec,
+  bufferToFloat32Array,
+} from './cosine-similarity.js';
 
 // ─── Internal Types ──────────────────────────────────────────────
 

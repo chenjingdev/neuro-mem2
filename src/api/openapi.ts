@@ -161,6 +161,51 @@ export function generateOpenApiSpec(port: number = 3030): OpenApiSpec {
           },
         },
       },
+      '/search/hybrid': {
+        post: {
+          operationId: 'hybridSearch',
+          summary: 'FTS5 + vector hybrid search on MemoryNode',
+          description:
+            'Execute 2-stage hybrid search: FTS5 pre-filtering for keyword matching, ' +
+            'followed by vector cosine similarity reranking. Supports 한영 혼용 (Korean-English mixed) queries. ' +
+            'Falls back to brute-force vector search when FTS5 returns insufficient candidates.',
+          tags: ['Retrieval'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/HybridSearchRequest' },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Hybrid search completed successfully',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/HybridSearchResponse' },
+                },
+              },
+            },
+            '400': {
+              description: 'Validation error',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+            '503': {
+              description: 'Hybrid search service not configured',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
       '/health': {
         get: {
           operationId: 'healthCheck',
@@ -239,7 +284,6 @@ export function generateOpenApiSpec(port: number = 3030): OpenApiSpec {
         AppendMessageResponse: {
           type: 'object',
           properties: {
-            messageId: { type: 'string' },
             conversationId: { type: 'string' },
             turnIndex: { type: 'integer' },
             createdAt: { type: 'string', format: 'date-time' },
@@ -298,6 +342,69 @@ export function generateOpenApiSpec(port: number = 3030): OpenApiSpec {
                 graph: { type: 'number', nullable: true },
               },
             },
+          },
+        },
+        HybridSearchRequest: {
+          type: 'object',
+          required: ['query'],
+          properties: {
+            query: {
+              type: 'string',
+              minLength: 1,
+              description: 'Query text for hybrid search (한영 혼용 supported)',
+            },
+            topK: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            minScore: { type: 'number', minimum: 0, maximum: 1, default: 0.1 },
+            ftsWeight: { type: 'number', minimum: 0, maximum: 1, default: 0.3 },
+            nodeTypeFilter: {
+              oneOf: [
+                { type: 'string', enum: ['semantic', 'episodic', 'procedural', 'prospective', 'emotional'] },
+                {
+                  type: 'array',
+                  items: { type: 'string', enum: ['semantic', 'episodic', 'procedural', 'prospective', 'emotional'] },
+                },
+              ],
+            },
+            nodeRoleFilter: { type: 'string', enum: ['hub', 'leaf'] },
+            applyDecay: { type: 'boolean', default: true },
+            includeStats: { type: 'boolean', default: false },
+            currentEventCounter: { type: 'number', minimum: 0 },
+          },
+        },
+        HybridSearchResponse: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/HybridSearchItem' },
+            },
+            totalItems: { type: 'integer' },
+            query: { type: 'string' },
+            stats: {
+              type: 'object',
+              nullable: true,
+              description: 'Search performance stats (only when includeStats=true)',
+            },
+          },
+        },
+        HybridSearchItem: {
+          type: 'object',
+          properties: {
+            nodeId: { type: 'string' },
+            nodeType: { type: 'string', nullable: true },
+            nodeRole: { type: 'string', enum: ['hub', 'leaf'] },
+            frontmatter: { type: 'string' },
+            score: { type: 'number' },
+            scoreBreakdown: {
+              type: 'object',
+              properties: {
+                ftsScore: { type: 'number' },
+                vectorScore: { type: 'number' },
+                decayFactor: { type: 'number' },
+                combinedBeforeDecay: { type: 'number' },
+              },
+            },
+            source: { type: 'string', enum: ['fts+vector', 'vector-only', 'fts-only'] },
           },
         },
         HealthResponse: {

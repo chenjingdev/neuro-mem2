@@ -1,0 +1,353 @@
+/* ─── NodeFilterBar ──────────────────────────────────────────
+ * Pill/chip-based toggle filter UI for MemoryNode nodeType + nodeRole.
+ * Features: toggle chips, sort selector, search input, reset button, badge count.
+ */
+
+/* ─── Container ──────────────────────────────────────────── */
+
+.nfb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.nfb--collapsed {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── Top Row (header + controls) ────────────────────────── */
+
+.nfb__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.nfb__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nfb__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nfb__badge--zero {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.nfb__header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.nfb__btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.nfb__btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(74, 158, 255, 0.08);
+}
+
+.nfb__btn--reset {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.nfb__btn--reset:hover {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.nfb__toggle-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nfb__toggle-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ─── Search Row ─────────────────────────────────────────── */
+
+.nfb__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nfb__search-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.nfb__search-input {
+  width: 100%;
+  padding: 5px 8px 5px 26px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.nfb__search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.nfb__search-input:focus {
+  border-color: var(--accent);
+}
+
+.nfb__search-clear {
+  position: absolute;
+  right: 4px;
+  padding: 2px 5px;
+  font-size: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.nfb__search-clear:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ─── Filter Section ─────────────────────────────────────── */
+
+.nfb__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nfb__section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.nfb__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ─── Filter Chip (Pill Toggle) ──────────────────────────── */
+
+.nfb__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.nfb__chip:hover {
+  border-color: var(--chip-color, var(--accent));
+  color: var(--text);
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 8%, transparent);
+}
+
+.nfb__chip--active {
+  border-color: var(--chip-color, var(--accent));
+  color: var(--chip-color, var(--accent));
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 15%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--chip-color, var(--accent)) 20%, transparent);
+}
+
+.nfb__chip--all {
+  font-style: italic;
+}
+
+.nfb__chip--all.nfb__chip--active {
+  border-color: var(--text-muted);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+.nfb__chip-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.nfb__chip-count {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.nfb__chip--active .nfb__chip-count {
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 25%, transparent);
+  color: var(--chip-color, var(--accent));
+}
+
+/* ─── Sort Row ───────────────────────────────────────────── */
+
+.nfb__sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nfb__sort-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.nfb__sort-select {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.nfb__sort-select:focus {
+  border-color: var(--accent);
+}
+
+/* ─── Total Count ────────────────────────────────────────── */
+
+.nfb__total {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  padding-top: 2px;
+}
+
+.nfb__total-number {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Inline Summary (Collapsed View) ────────────────────── */
+
+.nfb__inline-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.nfb__inline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  border: 1px solid var(--chip-color, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--chip-color, var(--accent)) 10%, transparent);
+  color: var(--chip-color, var(--text));
+  white-space: nowrap;
+}
+
+/* ─── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .nfb {
+    padding: 8px;
+  }
+
+  .nfb__chips {
+    gap: 3px;
+  }
+
+  .nfb__chip {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .nfb__chip,
+  .nfb__btn,
+  .nfb__toggle-btn,
+  .nfb__search-input,
+  .nfb__sort-select {
+    transition: none;
+  }
+}

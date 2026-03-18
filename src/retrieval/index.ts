@@ -44,11 +44,24 @@ export {
   type ScoredConcept,
 } from './graph-traverser.js';
 
+// ── Cosine similarity (dedicated module) ──
+export {
+  cosineSimilarity,
+  cosineSimilarityRaw,
+  cosineSimilarityVec,
+  batchCosineSimilarity,
+  bufferToFloat32Array,
+  float32ArrayToBuffer,
+  l2Normalize,
+  l2Norm,
+  dotProduct,
+  type VectorInput,
+  type SimilarityResult,
+} from './cosine-similarity.js';
+
 // ── Vector search ──
 export {
   VectorSearcher,
-  cosineSimilarityVec,
-  bufferToFloat32Array,
   DEFAULT_VECTOR_SEARCH_CONFIG,
   type VectorSearchConfig,
   type VectorSearchResult,
@@ -178,6 +191,44 @@ export type {
   FormattedMemoryContext,
 } from './memory-context-formatter.js';
 
+// ── FTS5 keyword matcher ──
+export {
+  Fts5Matcher,
+  normalizeRanks,
+  BM25_WEIGHT_FRONTMATTER,
+  BM25_WEIGHT_KEYWORDS,
+  BM25_WEIGHT_SUMMARY,
+} from './fts5-matcher.js';
+
+export type {
+  Fts5MatchResult,
+  Fts5MatchOptions,
+} from './fts5-matcher.js';
+
+// ── Hybrid searcher (FTS5 + vector reranking) ──
+export {
+  HybridSearcher,
+  DEFAULT_HYBRID_SEARCH_CONFIG,
+  normalizeFtsRanks,
+  computeEventDecay,
+} from './hybrid-searcher.js';
+
+export type {
+  HybridSearchConfig,
+  HybridSearchItem,
+  HybridSearchResult,
+  HybridSearchStats,
+} from './hybrid-searcher.js';
+
+// ── Progressive depth enricher ──
+export {
+  ProgressiveDepthEnricher,
+} from './progressive-depth-enricher.js';
+
+export type {
+  EnrichmentStats,
+} from './progressive-depth-enricher.js';
+
 // ── Shared types ──
 export type {
   ScoredMemoryItem,
@@ -186,4 +237,5 @@ export type {
   MergeResult,
   MergeStats,
   RetrievalSource,
+  DepthLevel,
 } from './types.js';

@@ -1,6 +1,9 @@
 /**
  * Repository for raw conversation storage.
  * All write operations preserve immutability of existing records.
+ *
+ * raw_messages uses a turn-based composite PK: (conversation_id, turn_index).
+ * This eliminates UUID overhead and enables efficient range queries.
  */
 
 import type Database from 'better-sqlite3';
@@ -39,8 +42,8 @@ export class ConversationRepository {
     `);
 
     const insertMessage = this.db.prepare(`
-      INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at, metadata)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     const txn = this.db.transaction(() => {
@@ -55,9 +58,7 @@ export class ConversationRepository {
 
       for (let i = 0; i < input.messages.length; i++) {
         const msg = input.messages[i]!;
-        const messageId = uuidv4();
         const message: RawMessage = {
-          id: messageId,
           conversationId,
           role: msg.role,
           content: msg.content,
@@ -67,11 +68,10 @@ export class ConversationRepository {
         };
 
         insertMessage.run(
-          message.id,
           message.conversationId,
+          message.turnIndex,
           message.role,
           message.content,
-          message.turnIndex,
           message.createdAt,
           message.metadata ? JSON.stringify(message.metadata) : null
         );
@@ -97,10 +97,8 @@ export class ConversationRepository {
     `).get(input.conversationId) as { max_turn: number | null } | undefined;
 
     const nextTurn = (lastTurn?.max_turn ?? -1) + 1;
-    const messageId = uuidv4();
 
     const message: RawMessage = {
-      id: messageId,
       conversationId: input.conversationId,
       role: input.role,
       content: input.content,
@@ -111,14 +109,13 @@ export class ConversationRepository {
 
     const txn = this.db.transaction(() => {
       this.db.prepare(`
-        INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at, metadata)
+        VALUES (?, ?, ?, ?, ?, ?)
       `).run(
-        message.id,
         message.conversationId,
+        message.turnIndex,
         message.role,
         message.content,
-        message.turnIndex,
         message.createdAt,
         message.metadata ? JSON.stringify(message.metadata) : null
       );
@@ -165,22 +162,45 @@ export class ConversationRepository {
    */
   getMessages(conversationId: string): RawMessage[] {
     const rows = this.db.prepare(`
-      SELECT id, conversation_id, role, content, turn_index, created_at, metadata
+      SELECT conversation_id, turn_index, role, content, created_at, metadata
       FROM raw_messages WHERE conversation_id = ? ORDER BY turn_index ASC
     `).all(conversationId) as Array<{
-      id: string; conversation_id: string; role: string;
-      content: string; turn_index: number; created_at: string; metadata: string | null;
+      conversation_id: string; turn_index: number; role: string;
+      content: string; created_at: string; metadata: string | null;
     }>;
 
     return rows.map(r => ({
-      id: r.id,
       conversationId: r.conversation_id,
+      turnIndex: r.turn_index,
       role: r.role as RawMessage['role'],
       content: r.content,
-      turnIndex: r.turn_index,
       createdAt: r.created_at,
       metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
     }));
+  }
+
+  /**
+   * Get a single message by its composite key (conversationId, turnIndex).
+   */
+  getMessage(conversationId: string, turnIndex: number): RawMessage | null {
+    const row = this.db.prepare(`
+      SELECT conversation_id, turn_index, role, content, created_at, metadata
+      FROM raw_messages WHERE conversation_id = ? AND turn_index = ?
+    `).get(conversationId, turnIndex) as {
+      conversation_id: string; turn_index: number; role: string;
+      content: string; created_at: string; metadata: string | null;
+    } | undefined;
+
+    if (!row) return null;
+
+    return {
+      conversationId: row.conversation_id,
+      turnIndex: row.turn_index,
+      role: row.role as RawMessage['role'],
+      content: row.content,
+      createdAt: row.created_at,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+    };
   }
 
   /**
@@ -217,31 +237,6 @@ export class ConversationRepository {
   }
 
   /**
-   * Get a single message by ID.
-   */
-  getMessage(messageId: string): RawMessage | null {
-    const row = this.db.prepare(`
-      SELECT id, conversation_id, role, content, turn_index, created_at, metadata
-      FROM raw_messages WHERE id = ?
-    `).get(messageId) as {
-      id: string; conversation_id: string; role: string;
-      content: string; turn_index: number; created_at: string; metadata: string | null;
-    } | undefined;
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      conversationId: row.conversation_id,
-      role: row.role as RawMessage['role'],
-      content: row.content,
-      turnIndex: row.turn_index,
-      createdAt: row.created_at,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-    };
-  }
-
-  /**
    * Count total conversations.
    */
   countConversations(): number {
@@ -273,21 +268,20 @@ export class ConversationRepository {
    */
   getMessagesInRange(conversationId: string, fromTurn: number, toTurn: number): RawMessage[] {
     const rows = this.db.prepare(`
-      SELECT id, conversation_id, role, content, turn_index, created_at, metadata
+      SELECT conversation_id, turn_index, role, content, created_at, metadata
       FROM raw_messages
       WHERE conversation_id = ? AND turn_index >= ? AND turn_index <= ?
       ORDER BY turn_index ASC
     `).all(conversationId, fromTurn, toTurn) as Array<{
-      id: string; conversation_id: string; role: string;
-      content: string; turn_index: number; created_at: string; metadata: string | null;
+      conversation_id: string; turn_index: number; role: string;
+      content: string; created_at: string; metadata: string | null;
     }>;
 
     return rows.map(r => ({
-      id: r.id,
       conversationId: r.conversation_id,
+      turnIndex: r.turn_index,
       role: r.role as RawMessage['role'],
       content: r.content,
-      turnIndex: r.turn_index,
       createdAt: r.created_at,
       metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
     }));
@@ -299,23 +293,22 @@ export class ConversationRepository {
    */
   getLatestMessages(conversationId: string, limit: number): RawMessage[] {
     const rows = this.db.prepare(`
-      SELECT id, conversation_id, role, content, turn_index, created_at, metadata
+      SELECT conversation_id, turn_index, role, content, created_at, metadata
       FROM raw_messages
       WHERE conversation_id = ?
       ORDER BY turn_index DESC
       LIMIT ?
     `).all(conversationId, limit) as Array<{
-      id: string; conversation_id: string; role: string;
-      content: string; turn_index: number; created_at: string; metadata: string | null;
+      conversation_id: string; turn_index: number; role: string;
+      content: string; created_at: string; metadata: string | null;
     }>;
 
     // Reverse to chronological order
     return rows.reverse().map(r => ({
-      id: r.id,
       conversationId: r.conversation_id,
+      turnIndex: r.turn_index,
       role: r.role as RawMessage['role'],
       content: r.content,
-      turnIndex: r.turn_index,
       createdAt: r.created_at,
       metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
     }));

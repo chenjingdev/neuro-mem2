@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import type { TraceEvent } from '../types';
+import type { DepthLayer } from '../types/timeline';
+import {
+  DEPTH_LAYER_LABELS,
+  DEPTH_LAYER_COLORS,
+  DEPTH_LAYER_BG,
+  DEPTH_LAYER_BORDER,
+  DEPTH_LAYER_ICONS,
+  STAGE_DEPTH_LAYER,
+  getStageDepthLayer,
+} from '../types/timeline';
 
 interface TraceTimelineProps {
   traces: TraceEvent[];
@@ -19,6 +29,15 @@ const STAGE_COLORS: Record<string, string> = {
   session: '#636e72',
   llm: '#ff7675',
   pipeline: '#74b9ff',
+  // New MemoryNode pipeline stages
+  vector_search: '#4a9eff',
+  graph_traversal: '#6c5ce7',
+  merge: '#00b894',
+  reinforce: '#fdcb6e',
+  format: '#00cec9',
+  inject: '#a29bfe',
+  node_extraction: '#e17055',
+  batch_extraction: '#e84393',
 };
 
 // ─── Stage Groups (for visual grouping) ───────────────────────
@@ -28,12 +47,21 @@ const STAGE_GROUPS: Record<string, string> = {
   'graph-traversal': 'Recall',
   'result-merge': 'Recall',
   'context-injection': 'Recall',
+  vector_search: 'Recall',
+  graph_traversal: 'Recall',
+  merge: 'Recall',
+  reinforce: 'Recall',
+  format: 'Recall',
+  inject: 'Recall',
   llm: 'LLM',
   ingestion: 'Ingestion',
   'fact-extraction': 'Ingestion',
   'episode-extraction': 'Ingestion',
   'concept-extraction': 'Ingestion',
+  node_extraction: 'Ingestion',
+  batch_extraction: 'Ingestion',
   session: 'Session',
+  session_end: 'Session',
   pipeline: 'Pipeline',
 };
 
@@ -89,6 +117,34 @@ function groupTraces(traces: TraceEvent[]): TraceGroup[] {
   }));
 }
 
+// ─── DepthLayerBadge component ────────────────────────────────
+function DepthLayerBadge({ layer }: { layer: DepthLayer }) {
+  return (
+    <span
+      className="trace-depth-badge"
+      style={{
+        color: DEPTH_LAYER_COLORS[layer],
+        backgroundColor: DEPTH_LAYER_BG[layer],
+        borderColor: DEPTH_LAYER_BORDER[layer],
+      }}
+      title={`Memory Depth: ${DEPTH_LAYER_LABELS[layer]}`}
+    >
+      <span className="trace-depth-icon">{DEPTH_LAYER_ICONS[layer]}</span>
+      {DEPTH_LAYER_LABELS[layer]}
+    </span>
+  );
+}
+
+// ─── DepthLayerIndicator — left border accent ─────────────────
+function getDepthLayerStyle(stage: string): React.CSSProperties {
+  const layer = getStageDepthLayer(stage);
+  if (!layer) return {};
+  return {
+    borderLeftColor: DEPTH_LAYER_BORDER[layer],
+    backgroundColor: DEPTH_LAYER_BG[layer],
+  };
+}
+
 // ─── TraceItem component ───────────────────────────────────────
 function TraceItem({ trace, index }: { trace: TraceEvent; index: number }) {
   const [visible, setVisible] = useState(false);
@@ -104,19 +160,28 @@ function TraceItem({ trace, index }: { trace: TraceEvent; index: number }) {
   const isActive = trace.status === 'start';
   const isError = trace.status === 'error';
   const isSkipped = trace.status === 'skipped';
+  const depthLayer = getStageDepthLayer(trace.stage);
 
   return (
     <div
       ref={ref}
-      className={`trace-item trace-status-${trace.status}${visible ? ' trace-visible' : ''}`}
-      style={{ '--stage-color': color } as React.CSSProperties}
+      className={`trace-item trace-status-${trace.status}${visible ? ' trace-visible' : ''}${depthLayer ? ` trace-depth-${depthLayer}` : ''}`}
+      style={{
+        '--stage-color': color,
+        ...getDepthLayerStyle(trace.stage),
+      } as React.CSSProperties}
     >
       <div className="trace-connector">
         <div
           className={`trace-dot${isActive ? ' trace-dot-active' : ''}`}
-          style={{ backgroundColor: color }}
+          style={{
+            backgroundColor: depthLayer ? DEPTH_LAYER_COLORS[depthLayer] : color,
+          }}
         />
-        <div className="trace-line" />
+        <div
+          className="trace-line"
+          style={depthLayer ? { background: DEPTH_LAYER_BORDER[depthLayer] } : undefined}
+        />
       </div>
       <div className="trace-body">
         <div className="trace-header">
@@ -125,6 +190,7 @@ function TraceItem({ trace, index }: { trace: TraceEvent; index: number }) {
             {trace.stage}
           </span>
           <div className="trace-meta">
+            {depthLayer && <DepthLayerBadge layer={depthLayer} />}
             <span className={`trace-status-badge trace-badge-${trace.status}`}>
               {trace.status}
             </span>
@@ -161,6 +227,25 @@ function TraceItem({ trace, index }: { trace: TraceEvent; index: number }) {
   );
 }
 
+// ─── Depth Layer Legend ──────────────────────────────────────
+function DepthLayerLegend() {
+  const layers: DepthLayer[] = ['flash', 'short', 'mid', 'long'];
+  return (
+    <div className="trace-depth-legend">
+      {layers.map((layer) => (
+        <span
+          key={layer}
+          className="trace-depth-legend-item"
+          style={{ color: DEPTH_LAYER_COLORS[layer] }}
+        >
+          <span className="trace-depth-legend-dot" style={{ backgroundColor: DEPTH_LAYER_COLORS[layer] }} />
+          {DEPTH_LAYER_ICONS[layer]} {DEPTH_LAYER_LABELS[layer]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── TraceGroup component ──────────────────────────────────────
 function TraceGroupSection({ group }: { group: TraceGroup }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -175,6 +260,13 @@ function TraceGroupSection({ group }: { group: TraceGroup }) {
   const isActive = group.traces.some((t) => t.status === 'start') &&
     !group.traces.some((t) => t.status === 'complete' || t.status === 'error');
 
+  // Collect unique depth layers in this group
+  const groupLayers = new Set<DepthLayer>();
+  for (const t of group.traces) {
+    const dl = getStageDepthLayer(t.stage);
+    if (dl) groupLayers.add(dl);
+  }
+
   return (
     <div className={`trace-group${hasError ? ' trace-group-error' : ''}${isActive ? ' trace-group-active' : ''}`}>
       <button
@@ -184,6 +276,21 @@ function TraceGroupSection({ group }: { group: TraceGroup }) {
       >
         <span className="trace-group-icon">{group.icon}</span>
         <span className="trace-group-name">{group.name}</span>
+        {/* Show depth layer dots for the group */}
+        {groupLayers.size > 0 && (
+          <span className="trace-group-layers">
+            {(['flash', 'short', 'mid', 'long'] as DepthLayer[])
+              .filter((l) => groupLayers.has(l))
+              .map((l) => (
+                <span
+                  key={l}
+                  className="trace-group-layer-dot"
+                  style={{ backgroundColor: DEPTH_LAYER_COLORS[l] }}
+                  title={DEPTH_LAYER_LABELS[l]}
+                />
+              ))}
+          </span>
+        )}
         <span className="trace-group-count">{group.traces.length}</span>
         {totalDuration > 0 && (
           <span className="trace-group-duration">{totalDuration}ms</span>
@@ -223,6 +330,8 @@ export function TraceTimeline({ traces }: TraceTimelineProps) {
           <span className="trace-count">{traces.length} events</span>
         )}
       </div>
+      {/* Depth layer legend */}
+      {traces.length > 0 && <DepthLayerLegend />}
       {traces.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">{'\ud83d\udd0d'}</div>

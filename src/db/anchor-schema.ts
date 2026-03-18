@@ -53,28 +53,25 @@ CREATE INDEX IF NOT EXISTS idx_anchors_last_accessed
 CREATE TABLE IF NOT EXISTS weighted_edges (
   id TEXT PRIMARY KEY NOT NULL,
   source_id TEXT NOT NULL,
-  source_type TEXT NOT NULL CHECK(source_type IN ('episode', 'concept', 'fact', 'anchor')),
+  source_type TEXT NOT NULL CHECK(source_type IN ('hub', 'leaf')),
   target_id TEXT NOT NULL,
-  target_type TEXT NOT NULL CHECK(target_type IN ('episode', 'concept', 'fact', 'anchor')),
+  target_type TEXT NOT NULL CHECK(target_type IN ('hub', 'leaf')),
   edge_type TEXT NOT NULL CHECK(edge_type IN (
-    'episode_mentions_concept',
-    'concept_related_to',
-    'fact_supports_concept',
-    'episode_contains_fact',
-    'temporal_next',
-    'derived_from',
-    'anchor_to_fact',
-    'anchor_to_episode',
-    'anchor_to_concept',
-    'anchor_to_anchor',
-    'query_activated'
+    'about',
+    'related',
+    'caused',
+    'precedes',
+    'refines',
+    'contradicts'
   )),
-  weight REAL NOT NULL DEFAULT 0.5 CHECK(weight >= 0.0 AND weight <= 1.0),
-  initial_weight REAL NOT NULL DEFAULT 0.5 CHECK(initial_weight >= 0.0 AND initial_weight <= 1.0),
+  weight REAL NOT NULL DEFAULT 0.5 CHECK(weight >= 0.0 AND weight <= 100.0),
+  initial_weight REAL NOT NULL DEFAULT 0.5 CHECK(initial_weight >= 0.0 AND initial_weight <= 100.0),
+  shield REAL NOT NULL DEFAULT 0.0 CHECK(shield >= 0.0),
   learning_rate REAL NOT NULL DEFAULT 0.1 CHECK(learning_rate > 0.0 AND learning_rate <= 1.0),
   decay_rate REAL NOT NULL DEFAULT 0.01 CHECK(decay_rate >= 0.0 AND decay_rate <= 1.0),
   activation_count INTEGER NOT NULL DEFAULT 0,
   last_activated_at TEXT,                  -- ISO 8601 timestamp
+  last_activated_at_event REAL NOT NULL DEFAULT 0,  -- global event counter value
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   metadata TEXT,                           -- JSON string

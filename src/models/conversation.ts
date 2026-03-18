@@ -3,23 +3,22 @@
  *
  * Design principles:
  * - Original conversation data is ALWAYS preserved immutably
- * - Each message has a unique ID for referencing from memory layers
+ * - Each message is uniquely identified by (conversationId, turnIndex) composite key
  * - Conversations are append-only; messages cannot be modified or deleted
+ * - Turn-based PK enables efficient range queries and progressive depth retrieval
  */
 
 export type Role = 'user' | 'assistant' | 'system';
 
 export interface RawMessage {
-  /** Unique message identifier (UUID v4) */
-  id: string;
-  /** Parent conversation ID */
+  /** Parent conversation ID (part of composite PK) */
   conversationId: string;
+  /** Zero-based turn index within the conversation (part of composite PK) */
+  turnIndex: number;
   /** Message role */
   role: Role;
   /** Raw message content (preserved exactly as received) */
   content: string;
-  /** Zero-based turn index within the conversation */
-  turnIndex: number;
   /** ISO 8601 timestamp of when the message was created */
   createdAt: string;
   /** Optional metadata (model info, token counts, etc.) */

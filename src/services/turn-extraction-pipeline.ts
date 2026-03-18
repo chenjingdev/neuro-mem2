@@ -14,6 +14,7 @@
  * - Only triggers on assistant messages (a complete turn = user + assistant)
  * - Extraction is async and non-blocking to the message append path
  * - Errors are caught and emitted as events, never crash the pipeline
+ * - Messages are identified by (conversationId, turnIndex) composite key
  */
 
 import type { EventBus, TurnCompletedEvent } from '../events/event-bus.js';
@@ -90,12 +91,10 @@ export class TurnExtractionPipeline {
     const extractionInput: FactExtractionInput = {
       conversationId,
       userMessage: {
-        id: userMessage.id,
         content: userMessage.content,
         turnIndex: userMessage.turnIndex,
       },
       assistantMessage: {
-        id: message.id,
         content: message.content,
         turnIndex: message.turnIndex,
       },
@@ -129,7 +128,7 @@ export class TurnExtractionPipeline {
         await this.eventBus.emit({
           type: 'facts.extracted' as const,
           conversationId,
-          sourceMessageId: message.id,
+          sourceTurnIndex: message.turnIndex,
           facts: savedFacts,
           timestamp: new Date().toISOString(),
         });
@@ -138,7 +137,7 @@ export class TurnExtractionPipeline {
         await this.eventBus.emit({
           type: 'extraction.error' as const,
           conversationId,
-          sourceMessageId: message.id,
+          sourceTurnIndex: message.turnIndex,
           error: result.error ?? 'Unknown extraction error',
           timestamp: new Date().toISOString(),
         });
@@ -148,7 +147,7 @@ export class TurnExtractionPipeline {
       await this.eventBus.emit({
         type: 'extraction.error' as const,
         conversationId,
-        sourceMessageId: message.id,
+        sourceTurnIndex: message.turnIndex,
         error: err instanceof Error ? err.message : String(err),
         timestamp: new Date().toISOString(),
       });
@@ -159,7 +158,7 @@ export class TurnExtractionPipeline {
    * Find the user message immediately preceding the given turn index.
    */
   private findPrecedingUserMessage(
-    messages: Array<{ id: string; role: string; content: string; turnIndex: number }>,
+    messages: Array<{ role: string; content: string; turnIndex: number }>,
     assistantTurnIndex: number,
   ) {
     // Look backwards from the assistant message for the nearest user message

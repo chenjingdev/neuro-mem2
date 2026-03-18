@@ -11,6 +11,12 @@
  */
 
 import type { MemoryNodeType } from '../models/memory-edge.js';
+import type { MemoryNodeMetadata } from '../models/memory-node.js';
+
+// ─── Progressive Depth ──────────────────────────────────────
+
+/** Depth level for progressive depth retrieval */
+export type DepthLevel = 'L0' | 'L1' | 'L2' | 'L3';
 
 // ─── Source Path ─────────────────────────────────────────────
 
@@ -40,6 +46,14 @@ export interface ScoredMemoryItem {
   content: string;
   /** Optional metadata about the retrieval (e.g., traversal depth, anchor activated) */
   retrievalMetadata?: Record<string, unknown>;
+  /** Progressive depth level this item was enriched to */
+  depthLevel?: DepthLevel;
+  /** L1 structured metadata (populated when depthLevel >= 'L1') */
+  nodeMetadata?: MemoryNodeMetadata;
+  /** L2 summary text (populated when depthLevel >= 'L2') */
+  summary?: string;
+  /** L0 frontmatter label */
+  frontmatter?: string;
 }
 
 // ─── Merged Result ───────────────────────────────────────────
@@ -67,6 +81,14 @@ export interface MergedMemoryItem {
   };
   /** Combined retrieval metadata from all sources */
   retrievalMetadata?: Record<string, unknown>;
+  /** Progressive depth level this item was enriched to */
+  depthLevel?: DepthLevel;
+  /** L1 structured metadata (populated when depthLevel >= 'L1') */
+  nodeMetadata?: MemoryNodeMetadata;
+  /** L2 summary text (populated when depthLevel >= 'L2') */
+  summary?: string;
+  /** L0 frontmatter label */
+  frontmatter?: string;
 }
 
 // ─── Merger Configuration ────────────────────────────────────

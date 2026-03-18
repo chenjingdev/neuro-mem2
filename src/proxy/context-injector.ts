@@ -37,6 +37,12 @@ export interface InjectionOptions {
 
 /**
  * Format memory items into a readable text block for injection.
+ *
+ * Uses progressive depth to select the appropriate content level:
+ *   L0 → frontmatter (one-line label)
+ *   L1 → frontmatter + metadata inline
+ *   L2 → summary
+ *   L3 → full content
  */
 export function formatMemories(items: MergedMemoryItem[], maxCount: number): string {
   const selected = items.slice(0, maxCount);
@@ -46,9 +52,36 @@ export function formatMemories(items: MergedMemoryItem[], maxCount: number): str
     .map((item, i) => {
       const typeLabel = item.nodeType.charAt(0).toUpperCase() + item.nodeType.slice(1);
       const score = (item.score * 100).toFixed(0);
-      return `[${i + 1}] (${typeLabel}, relevance: ${score}%) ${item.content}`;
+      const depth = item.depthLevel ?? 'L2';
+      const content = getDepthContent(item, depth);
+      return `[${i + 1}] (${typeLabel}/${depth}, relevance: ${score}%) ${content}`;
     })
     .join('\n');
+}
+
+/**
+ * Select display content based on progressive depth level.
+ */
+function getDepthContent(item: MergedMemoryItem, depth: string): string {
+  switch (depth) {
+    case 'L0':
+      return item.frontmatter ?? item.content;
+    case 'L1': {
+      const fm = item.frontmatter ?? item.content;
+      if (item.nodeMetadata) {
+        const parts: string[] = [];
+        if (item.nodeMetadata.category) parts.push(item.nodeMetadata.category);
+        if (item.nodeMetadata.entities?.length) parts.push(`entities: ${item.nodeMetadata.entities.join(', ')}`);
+        if (parts.length > 0) return `${fm} (${parts.join('; ')})`;
+      }
+      return fm;
+    }
+    case 'L2':
+      return item.summary ?? item.content;
+    case 'L3':
+    default:
+      return item.content;
+  }
 }
 
 /**

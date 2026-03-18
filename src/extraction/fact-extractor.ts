@@ -61,7 +61,7 @@ export class FactExtractor {
       const facts: Fact[] = parseResult.facts.map((extracted: ExtractedFact) => ({
         id: uuidv4(),
         conversationId: input.conversationId,
-        sourceMessageIds: [input.userMessage.id, input.assistantMessage.id],
+        sourceMessageIds: [`${input.conversationId}:${input.userMessage.turnIndex}`, `${input.conversationId}:${input.assistantMessage.turnIndex}`],
         sourceTurnIndex,
         content: extracted.content,
         category: extracted.category,

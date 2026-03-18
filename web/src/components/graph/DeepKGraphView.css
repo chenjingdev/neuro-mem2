@@ -1,0 +1,238 @@
+/**
+ * DeepKGraphView — CSS for concentric-circle depth graph visualization.
+ *
+ * Styles:
+ * - Container layout (full-height graph + overlay)
+ * - Depth ring legend (sidebar overlay)
+ * - SVG concentric ring circles
+ * - Empty state
+ * - sigma.js container tweaks for deepK view
+ */
+
+/* ─── Container ───────────────────────────────────────────── */
+
+.deepk-graph-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #12122a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.deepk-graph-container .sigma-container {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.deepk-graph-container .sigma-deepk {
+  width: 100%;
+  height: 100%;
+}
+
+/* ─── Empty State ─────────────────────────────────────────── */
+
+.deepk-graph-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  background: #12122a;
+  border-radius: 8px;
+  color: #8b8b9e;
+  gap: 8px;
+  padding: 32px;
+}
+
+.deepk-empty-icon {
+  font-size: 48px;
+  opacity: 0.6;
+  margin-bottom: 8px;
+}
+
+.deepk-graph-empty p {
+  margin: 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+.deepk-empty-hint {
+  font-size: 12px !important;
+  color: #5a5a72;
+}
+
+/* ─── Depth Ring Legend (overlay on bottom-left) ───────────── */
+
+.deepk-ring-legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(18, 18, 42, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(74, 158, 255, 0.15);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+  min-width: 180px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+.deepk-ring-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a0a0c0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(160, 160, 192, 0.15);
+}
+
+.deepk-ring-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #c0c0d8;
+  padding: 2px 0;
+  transition: background 0.15s ease;
+  border-radius: 4px;
+  padding: 3px 4px;
+}
+
+.deepk-ring-label:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.deepk-ring-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--ring-color, transparent);
+}
+
+.deepk-ring-text {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.deepk-ring-count {
+  font-size: 11px;
+  color: #8b8b9e;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+}
+
+/* ─── SVG Concentric Ring Circles ─────────────────────────── */
+
+.deepk-ring-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── DeepK Page Integration ──────────────────────────────── */
+
+.deepk-page-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+}
+
+.deepk-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(18, 18, 42, 0.85);
+  border-bottom: 1px solid rgba(74, 158, 255, 0.12);
+  flex-shrink: 0;
+}
+
+.deepk-controls-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #a0a0c0;
+}
+
+.deepk-controls-bar input[type="range"] {
+  width: 100px;
+  accent-color: #4a9eff;
+}
+
+.deepk-controls-bar .deepk-depth-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a9eff;
+  min-width: 18px;
+  text-align: center;
+}
+
+.deepk-controls-bar .deepk-node-count {
+  font-size: 11px;
+  color: #8b8b9e;
+  margin-left: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.deepk-graph-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+/* ─── View Toggle Button (in GraphExplorerPage) ──────────── */
+
+.deepk-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.deepk-view-toggle .gep-toggle-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .deepk-ring-legend {
+    bottom: 8px;
+    left: 8px;
+    padding: 8px 12px;
+    min-width: 150px;
+    font-size: 11px;
+  }
+
+  .deepk-ring-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .deepk-controls-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 12px;
+  }
+}

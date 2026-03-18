@@ -22,6 +22,7 @@ import type { ScoredMemoryItem, MergedMemoryItem, MergeResult, MergeStats } from
 import { VectorSearcher, type VectorSearchConfig, type VectorSearchResult } from './vector-searcher.js';
 import { QueryGraphTraverser, type GraphTraversalOptions, type GraphTraversalResult as QueryGraphResult } from './graph-traversal.js';
 import { ResultMerger } from './result-merger.js';
+import { ProgressiveDepthEnricher, type EnrichmentStats } from './progressive-depth-enricher.js';
 import { WeightedEdgeRepository } from '../db/weighted-edge-repo.js';
 import { AnchorRepository } from '../db/anchor-repo.js';
 
@@ -112,6 +113,13 @@ export interface RecallQuery {
    * merge, reinforce) will emit start/complete/error events with raw data.
    */
   traceHook?: RecallTraceHook;
+  /**
+   * Progressive depth parameter: top deepK nodes are enriched to L2 (summary + metadata),
+   * remaining nodes are enriched to L1 (metadata only).
+   * If 0 or undefined, no progressive depth enrichment is applied (items keep L0 content only).
+   * Default: 0 (no enrichment)
+   */
+  deepK?: number;
 }
 
 // ─── Recall Result ───────────────────────────────────────
@@ -148,6 +156,8 @@ export interface RecallDiagnostics {
   vectorTimedOut: boolean;
   /** Whether graph path timed out */
   graphTimedOut: boolean;
+  /** Progressive depth enrichment stats (if deepK was applied) */
+  enrichmentStats?: EnrichmentStats;
 }
 
 // ─── Internal path wrappers ──────────────────────────────
@@ -171,6 +181,7 @@ export class DualPathRetriever {
   private vectorSearcher: VectorSearcher;
   private queryGraphTraverser: QueryGraphTraverser;
   private resultMerger: ResultMerger;
+  private depthEnricher: ProgressiveDepthEnricher;
   private weightedEdgeRepo: WeightedEdgeRepository;
   private anchorRepo: AnchorRepository;
   private config: DualPathRetrieverConfig;
@@ -191,6 +202,7 @@ export class DualPathRetriever {
       maxResults: this.config.maxResults ?? 20,
       normalization: this.config.normalization ?? 'minmax',
     });
+    this.depthEnricher = new ProgressiveDepthEnricher(db);
     this.weightedEdgeRepo = new WeightedEdgeRepository(db);
     this.anchorRepo = new AnchorRepository(db);
   }
@@ -423,10 +435,23 @@ export class DualPathRetriever {
       });
     }
 
+    // ── Phase 4: Progressive depth enrichment ──
+    let enrichedItems = mergeResult.items;
+    let enrichmentStats: EnrichmentStats | undefined;
+
+    if (query.deepK && query.deepK > 0 && mergeResult.items.length > 0) {
+      const enrichResult = this.depthEnricher.enrichMergedItems(
+        mergeResult.items,
+        query.deepK,
+      );
+      enrichedItems = enrichResult.items;
+      enrichmentStats = enrichResult.stats;
+    }
+
     const totalTimeMs = round2(performance.now() - totalStart);
 
     return {
-      items: mergeResult.items,
+      items: enrichedItems,
       diagnostics: {
         activatedAnchors: vectorOut?.matchedAnchors ?? [],
         extractedEntities: graphOut?.extractedEntities ?? [],
@@ -440,6 +465,7 @@ export class DualPathRetriever {
         edgesReinforced,
         vectorTimedOut: vectorTimed.timedOut,
         graphTimedOut: graphTimed.timedOut,
+        enrichmentStats,
       },
     };
   }

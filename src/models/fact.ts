@@ -144,18 +144,17 @@ export interface UpdateFactInput {
 
 /**
  * Input to the fact extractor: a conversation turn (user + assistant pair).
+ * Messages are identified by (conversationId, turnIndex) composite key.
  */
 export interface FactExtractionInput {
   conversationId: string;
-  /** The user message */
+  /** The user message (identified by turnIndex within the conversation) */
   userMessage: {
-    id: string;
     content: string;
     turnIndex: number;
   };
-  /** The assistant response */
+  /** The assistant response (identified by turnIndex within the conversation) */
   assistantMessage: {
-    id: string;
     content: string;
     turnIndex: number;
   };

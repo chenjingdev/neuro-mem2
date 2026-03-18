@@ -10,4 +10,5 @@ export { SessionRepository } from './session-repo.js';
 export { CoRetrievalRepository } from './co-retrieval-repo.js';
 export { MemoryEmbeddingRepository } from './memory-embedding-repo.js';
 export type { MemoryEmbedding, StoreEmbeddingInput, EmbeddingRow } from './memory-embedding-repo.js';
+export { MemoryNodeRepository } from './memory-node-repo.js';
 export { SCHEMA_VERSION } from './schema.js';

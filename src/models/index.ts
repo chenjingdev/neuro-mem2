@@ -49,7 +49,7 @@ export type { ConceptCategory } from './concept.js';
 
 export type {
   MemoryEdge,
-  MemoryNodeType,
+  MemoryNodeType as LegacyMemoryNodeType,
   EdgeType,
   CreateEdgeInput,
 } from './memory-edge.js';
@@ -93,3 +93,20 @@ export type {
   CoRetrievalPairFilter,
   CoRetrievalStats,
 } from './co-retrieval.js';
+
+export type {
+  MemoryNode,
+  MemoryNodeType,
+  MemoryNodeTypeNullable,
+  MemoryNodeRole,
+  MemoryNodeMetadata,
+  MemoryNodeRef,
+  MemoryNodeL1,
+  MemoryNodeL2,
+  CreateMemoryNodeInput,
+  UpdateMemoryNodeInput,
+  ExtractedMemoryNode,
+  MemoryNodeFilter,
+} from './memory-node.js';
+
+export { MEMORY_NODE_TYPES, MEMORY_NODE_ROLES } from './memory-node.js';

@@ -13,6 +13,11 @@ import type {
   WeightedEdgeFilter,
   BatchCoActivationInput,
 } from '../models/weighted-edge.js';
+import {
+  WEIGHT_CAP,
+  BASE_SHIELD_GAIN,
+  computeShieldCap,
+} from '../models/weighted-edge.js';
 
 export class WeightedEdgeRepository {
   constructor(private db: Database.Database) {}
@@ -23,7 +28,10 @@ export class WeightedEdgeRepository {
   createEdge(input: CreateWeightedEdgeInput): WeightedEdge {
     const now = new Date().toISOString();
     const id = uuidv4();
-    const weight = input.weight ?? 0.5;
+    const weight = Math.min(WEIGHT_CAP, Math.max(0, input.weight ?? 0.5));
+    const shieldCap = computeShieldCap(input.importance ?? 0);
+    const shield = Math.min(shieldCap, Math.max(0, input.shield ?? 0));
+    const currentEvent = input.currentEvent ?? 0;
 
     const edge: WeightedEdge = {
       id,
@@ -34,19 +42,21 @@ export class WeightedEdgeRepository {
       edgeType: input.edgeType,
       weight,
       initialWeight: weight,
+      shield,
       learningRate: input.learningRate ?? 0.1,
       decayRate: input.decayRate ?? 0.01,
       activationCount: 0,
       createdAt: now,
       updatedAt: now,
+      lastActivatedAtEvent: currentEvent,
       metadata: input.metadata,
     };
 
     this.db.prepare(`
       INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
-        edge_type, weight, initial_weight, learning_rate, decay_rate,
-        activation_count, created_at, updated_at, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        edge_type, weight, initial_weight, shield, learning_rate, decay_rate,
+        activation_count, last_activated_at_event, created_at, updated_at, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       edge.id,
       edge.sourceId,
@@ -56,9 +66,11 @@ export class WeightedEdgeRepository {
       edge.edgeType,
       edge.weight,
       edge.initialWeight,
+      edge.shield,
       edge.learningRate,
       edge.decayRate,
       edge.activationCount,
+      edge.lastActivatedAtEvent,
       edge.createdAt,
       edge.updatedAt,
       edge.metadata ? JSON.stringify(edge.metadata) : null,
@@ -78,15 +90,18 @@ export class WeightedEdgeRepository {
 
     const insert = this.db.prepare(`
       INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
-        edge_type, weight, initial_weight, learning_rate, decay_rate,
-        activation_count, created_at, updated_at, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        edge_type, weight, initial_weight, shield, learning_rate, decay_rate,
+        activation_count, last_activated_at_event, created_at, updated_at, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const txn = this.db.transaction(() => {
       for (const input of inputs) {
         const id = uuidv4();
-        const weight = input.weight ?? 0.5;
+        const weight = Math.min(WEIGHT_CAP, Math.max(0, input.weight ?? 0.5));
+        const shieldCap = computeShieldCap(input.importance ?? 0);
+        const shield = Math.min(shieldCap, Math.max(0, input.shield ?? 0));
+        const currentEvent = input.currentEvent ?? 0;
 
         const edge: WeightedEdge = {
           id,
@@ -97,19 +112,22 @@ export class WeightedEdgeRepository {
           edgeType: input.edgeType,
           weight,
           initialWeight: weight,
+          shield,
           learningRate: input.learningRate ?? 0.1,
           decayRate: input.decayRate ?? 0.01,
           activationCount: 0,
           createdAt: now,
           updatedAt: now,
+          lastActivatedAtEvent: currentEvent,
           metadata: input.metadata,
         };
 
         insert.run(
           edge.id, edge.sourceId, edge.sourceType,
           edge.targetId, edge.targetType, edge.edgeType,
-          edge.weight, edge.initialWeight, edge.learningRate,
-          edge.decayRate, edge.activationCount,
+          edge.weight, edge.initialWeight, edge.shield,
+          edge.learningRate, edge.decayRate, edge.activationCount,
+          edge.lastActivatedAtEvent,
           edge.createdAt, edge.updatedAt,
           edge.metadata ? JSON.stringify(edge.metadata) : null,
         );
@@ -241,32 +259,59 @@ export class WeightedEdgeRepository {
   }
 
   /**
-   * Apply Hebbian reinforcement to an edge.
+   * Apply Hebbian reinforcement to an edge with shield overflow.
    *
-   * Formula: w_new = w_old + learningRate * (1 - w_old)
-   * This ensures weight approaches 1.0 asymptotically.
+   * 1. Compute raw delta: Δ = learningRate * (WEIGHT_CAP - weight) / WEIGHT_CAP
+   * 2. If weight + Δ > WEIGHT_CAP: overflow goes to shield + baseShieldGain
+   * 3. Shield is capped at dynamic shieldCap = 50 + importance * 50
+   * 4. lastActivatedAtEvent is updated to currentEvent
    */
-  reinforceEdge(edgeId: string, overrideLearningRate?: number): ReinforceResult | null {
+  reinforceEdge(
+    edgeId: string,
+    overrideLearningRate?: number,
+    currentEvent?: number,
+    importance?: number,
+  ): ReinforceResult | null {
     const edge = this.getEdge(edgeId);
     if (!edge) return null;
 
     const lr = overrideLearningRate ?? edge.learningRate;
-    const newWeight = Math.min(1.0, edge.weight + lr * (1 - edge.weight));
+    const headroom = (WEIGHT_CAP - edge.weight) / WEIGHT_CAP;
+    const delta = lr * WEIGHT_CAP * Math.max(0, headroom);
+    const rawWeight = edge.weight + delta;
     const now = new Date().toISOString();
     const newActivationCount = edge.activationCount + 1;
+    const eventValue = currentEvent ?? edge.lastActivatedAtEvent;
+
+    let newWeight: number;
+    let newShield = edge.shield;
+
+    if (rawWeight > WEIGHT_CAP) {
+      // Overflow: excess goes to shield + base gain
+      const overflow = rawWeight - WEIGHT_CAP;
+      newWeight = WEIGHT_CAP;
+      const shieldGain = overflow + BASE_SHIELD_GAIN;
+      const shieldCap = computeShieldCap(importance ?? 0);
+      newShield = Math.min(shieldCap, edge.shield + shieldGain);
+    } else {
+      newWeight = rawWeight;
+    }
 
     this.db.prepare(`
       UPDATE weighted_edges SET
-        weight = ?, activation_count = ?,
-        last_activated_at = ?, updated_at = ?
+        weight = ?, shield = ?, activation_count = ?,
+        last_activated_at = ?, last_activated_at_event = ?, updated_at = ?
       WHERE id = ?
-    `).run(newWeight, newActivationCount, now, now, edgeId);
+    `).run(newWeight, newShield, newActivationCount, now, eventValue, now, edgeId);
 
     return {
       edgeId,
       previousWeight: edge.weight,
       newWeight,
+      previousShield: edge.shield,
+      newShield,
       activationCount: newActivationCount,
+      lastActivatedAtEvent: eventValue,
     };
   }
 
@@ -288,20 +333,76 @@ export class WeightedEdgeRepository {
   }
 
   /**
-   * Apply time-based decay to all edges.
-   * Formula: w_new = w_old * (1 - decayRate)
+   * Apply event-based lazy decay to a single edge.
+   *
+   * Shield absorbs decay first: if shield > decayAmount, only shield decreases.
+   * Otherwise remaining decay hits weight.
+   *
+   * @param edgeId - Edge to decay
+   * @param currentEvent - Current global event counter
+   * @returns decay info or null if edge not found
+   */
+  applyLazyDecay(
+    edgeId: string,
+    currentEvent: number,
+  ): { decayAmount: number; shieldAbsorbed: number; weightReduced: number } | null {
+    const edge = this.getEdge(edgeId);
+    if (!edge) return null;
+
+    const eventDelta = Math.max(0, currentEvent - edge.lastActivatedAtEvent);
+    if (eventDelta === 0) return { decayAmount: 0, shieldAbsorbed: 0, weightReduced: 0 };
+
+    const decayAmount = edge.decayRate * eventDelta;
+    let shieldAbsorbed = 0;
+    let weightReduced = 0;
+    let newShield = edge.shield;
+    let newWeight = edge.weight;
+
+    if (newShield >= decayAmount) {
+      // Shield fully absorbs
+      shieldAbsorbed = decayAmount;
+      newShield -= decayAmount;
+    } else {
+      // Shield partially absorbs, rest hits weight
+      shieldAbsorbed = newShield;
+      const remaining = decayAmount - newShield;
+      newShield = 0;
+      weightReduced = Math.min(newWeight, remaining);
+      newWeight = Math.max(0, newWeight - remaining);
+    }
+
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE weighted_edges SET
+        weight = ?, shield = ?, last_activated_at_event = ?, updated_at = ?
+      WHERE id = ?
+    `).run(newWeight, newShield, currentEvent, now, edgeId);
+
+    return { decayAmount, shieldAbsorbed, weightReduced };
+  }
+
+  /**
+   * Apply event-based decay to all edges (batch).
+   * Shield absorbs decay first, then weight.
    * Returns the count of edges that were decayed.
    */
-  applyDecay(options?: { pruneBelow?: number }): { decayedCount: number; prunedCount: number } {
+  applyDecay(options?: { pruneBelow?: number; currentEvent?: number }): { decayedCount: number; prunedCount: number } {
     const now = new Date().toISOString();
+    const currentEvent = options?.currentEvent ?? 0;
 
-    // Apply decay: w_new = w * (1 - decay_rate)
+    // Two-step shield-first decay via SQL:
+    // 1. Compute decayAmount = decay_rate * (currentEvent - last_activated_at_event)
+    // 2. Shield absorbs first, then weight
     const decayResult = this.db.prepare(`
       UPDATE weighted_edges SET
-        weight = MAX(0.0, weight * (1.0 - decay_rate)),
+        weight = MAX(0.0, weight - MAX(0.0,
+          decay_rate * MAX(0.0, ? - last_activated_at_event) - shield
+        )),
+        shield = MAX(0.0, shield - decay_rate * MAX(0.0, ? - last_activated_at_event)),
+        last_activated_at_event = ?,
         updated_at = ?
-      WHERE decay_rate > 0
-    `).run(now);
+      WHERE decay_rate > 0 AND last_activated_at_event < ?
+    `).run(currentEvent, currentEvent, currentEvent, now, currentEvent);
 
     let prunedCount = 0;
     if (options?.pruneBelow !== undefined && options.pruneBelow > 0) {
@@ -318,10 +419,10 @@ export class WeightedEdgeRepository {
   }
 
   /**
-   * Update the raw weight of an edge (clamped to [0, 1]).
+   * Update the raw weight of an edge (clamped to [0, WEIGHT_CAP]).
    */
   updateWeight(edgeId: string, newWeight: number): void {
-    const clamped = Math.max(0, Math.min(1, newWeight));
+    const clamped = Math.max(0, Math.min(WEIGHT_CAP, newWeight));
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE weighted_edges SET weight = ?, updated_at = ? WHERE id = ?
@@ -334,6 +435,55 @@ export class WeightedEdgeRepository {
   deleteEdge(edgeId: string): boolean {
     const result = this.db.prepare('DELETE FROM weighted_edges WHERE id = ?').run(edgeId);
     return result.changes > 0;
+  }
+
+  /**
+   * List lightweight edge refs for graph visualization.
+   * Returns only source_id, target_id, edge_type, weight — minimal for rendering.
+   * Supports optional limit and minWeight for scalability.
+   */
+  listEdgeRefs(opts?: { limit?: number; minWeight?: number }): Array<{
+    id: string;
+    sourceId: string;
+    targetId: string;
+    edgeType: string;
+    weight: number;
+    shield: number;
+  }> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (opts?.minWeight !== undefined) {
+      conditions.push('weight >= ?');
+      params.push(opts.minWeight);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const limitClause = opts?.limit ? `LIMIT ${Math.min(opts.limit, 100000)}` : '';
+
+    const rows = this.db.prepare(`
+      SELECT id, source_id, target_id, edge_type, weight, shield
+      FROM weighted_edges
+      ${where}
+      ORDER BY weight DESC
+      ${limitClause}
+    `).all(...params) as Array<{
+      id: string;
+      source_id: string;
+      target_id: string;
+      edge_type: string;
+      weight: number;
+      shield: number;
+    }>;
+
+    return rows.map(r => ({
+      id: r.id,
+      sourceId: r.source_id,
+      targetId: r.target_id,
+      edgeType: r.edge_type,
+      weight: r.weight,
+      shield: r.shield,
+    }));
   }
 
   /**
@@ -356,10 +506,12 @@ export class WeightedEdgeRepository {
       edgeType: r.edge_type as WeightedEdge['edgeType'],
       weight: r.weight,
       initialWeight: r.initial_weight,
+      shield: r.shield,
       learningRate: r.learning_rate,
       decayRate: r.decay_rate,
       activationCount: r.activation_count,
       lastActivatedAt: r.last_activated_at ?? undefined,
+      lastActivatedAtEvent: r.last_activated_at_event,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       metadata: r.metadata ? JSON.parse(r.metadata) : undefined,
@@ -376,10 +528,12 @@ interface WeightedEdgeRow {
   edge_type: string;
   weight: number;
   initial_weight: number;
+  shield: number;
   learning_rate: number;
   decay_rate: number;
   activation_count: number;
   last_activated_at: string | null;
+  last_activated_at_event: number;
   created_at: string;
   updated_at: string;
   metadata: string | null;

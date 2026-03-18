@@ -26,6 +26,7 @@
  */
 
 import type { WeightedEdge } from '../models/weighted-edge.js';
+import { WEIGHT_CAP, BASE_SHIELD_GAIN, computeShieldCap } from '../models/weighted-edge.js';
 
 // ────────────────────────────────────────────────────────
 // Configuration
@@ -53,7 +54,7 @@ export interface HebbianUpdaterConfig {
   minActivation: number;
 
   /**
-   * Maximum weight ceiling (default: 1.0).
+   * Maximum weight ceiling (default: WEIGHT_CAP = 100).
    * Weights are clamped to [0, maxWeight].
    */
   maxWeight: number;
@@ -77,7 +78,7 @@ export const DEFAULT_HEBBIAN_CONFIG: HebbianUpdaterConfig = {
   learningRate: 0.1,
   halfSaturation: 5,
   minActivation: 0.1,
-  maxWeight: 1.0,
+  maxWeight: WEIGHT_CAP,
   minWeight: 0.0,
   useHeadroom: true,
 };
@@ -158,6 +159,26 @@ export interface CoRetrievalBatchResult {
   maxDelta: number;
   /** Total number of pairwise combinations evaluated */
   totalPairs: number;
+}
+
+/** Result of a shield-aware Hebbian update with overflow */
+export interface ShieldAwareUpdateResult extends HebbianUpdateResult {
+  /** Shield value before update */
+  previousShield: number;
+  /** Shield value after update */
+  newShield: number;
+  /** Amount of weight overflow that went to shield */
+  shieldGain: number;
+  /** Dynamic shield cap used */
+  shieldCap: number;
+}
+
+/** Input for shield-aware Hebbian update */
+export interface ShieldAwareUpdateInput extends HebbianUpdateInput {
+  /** Current shield value */
+  currentShield: number;
+  /** Node importance [0,1] for dynamic shield cap */
+  importance: number;
 }
 
 /** Input for combined reinforce + decay pass */
@@ -330,6 +351,55 @@ export class HebbianWeightUpdater {
       targetActivation: Math.round(targetActivation * 10000) / 10000,
       learningRate: lr,
       headroom: Math.round(headroom * 10000) / 10000,
+    };
+  }
+
+  /**
+   * Compute a shield-aware Hebbian weight update with overflow.
+   *
+   * When weight + delta > WEIGHT_CAP:
+   *   - weight is clamped to WEIGHT_CAP
+   *   - overflow + BASE_SHIELD_GAIN goes to shield
+   *   - shield is capped at computeShieldCap(importance)
+   */
+  computeShieldAwareUpdate(input: ShieldAwareUpdateInput): ShieldAwareUpdateResult {
+    const lr = input.learningRate ?? this.config.learningRate;
+    const sourceActivation = this.getActivationLevel(input.source);
+    const targetActivation = this.getActivationLevel(input.target);
+
+    const w = Math.max(0, Math.min(this.config.maxWeight, input.currentWeight));
+    const headroom = this.config.useHeadroom ? (this.config.maxWeight - w) / this.config.maxWeight : 1.0;
+    const delta = lr * this.config.maxWeight * sourceActivation * targetActivation * headroom;
+    const rawWeight = w + delta;
+
+    const shieldCap = computeShieldCap(input.importance);
+    let newWeight: number;
+    let newShield = input.currentShield;
+    let shieldGain = 0;
+
+    if (rawWeight > this.config.maxWeight) {
+      const overflow = rawWeight - this.config.maxWeight;
+      newWeight = this.config.maxWeight;
+      shieldGain = overflow + BASE_SHIELD_GAIN;
+      newShield = Math.min(shieldCap, input.currentShield + shieldGain);
+    } else {
+      newWeight = Math.max(this.config.minWeight, rawWeight);
+    }
+
+    return {
+      sourceId: input.source.nodeId,
+      targetId: input.target.nodeId,
+      previousWeight: input.currentWeight,
+      newWeight: Math.round(newWeight * 10000) / 10000,
+      delta: Math.round(delta * 10000) / 10000,
+      sourceActivation: Math.round(sourceActivation * 10000) / 10000,
+      targetActivation: Math.round(targetActivation * 10000) / 10000,
+      learningRate: lr,
+      headroom: Math.round(headroom * 10000) / 10000,
+      previousShield: input.currentShield,
+      newShield: Math.round(newShield * 10000) / 10000,
+      shieldGain: Math.round(shieldGain * 10000) / 10000,
+      shieldCap,
     };
   }
 

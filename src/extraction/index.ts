@@ -84,3 +84,32 @@ export {
   type AnchorConnectDecision,
   type AnchorCreateDecision,
 } from './anchor-judgment-prompt.js';
+
+// Unified MemoryNode extraction (single LLM call per turn)
+export {
+  MemoryNodeExtractor,
+  type MemoryNodeExtractionResult,
+} from './memory-node-extractor.js';
+export {
+  buildMemoryNodeExtractionRequest,
+  getMemoryNodeExtractionSystemPrompt,
+  type MemoryNodeExtractionInput,
+} from './memory-node-prompt.js';
+export {
+  parseMemoryNodeResponse,
+  type MemoryNodeParseResult,
+} from './memory-node-parser.js';
+
+// Hub candidate extraction (entity → hub matching pipeline)
+export {
+  HubCandidateExtractor,
+  DEFAULT_HUB_CANDIDATE_CONFIG,
+  normalizeEntityLabel,
+  looksLikeNamedEntity,
+  detectHubType,
+  computeNewHubConfidence,
+  type HubCandidateExtractorConfig,
+  type HubCandidate,
+  type HubCandidateExtractionResult,
+  type HubCandidateStats,
+} from './hub-candidate-extractor.js';

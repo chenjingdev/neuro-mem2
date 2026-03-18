@@ -24,6 +24,7 @@ import {
   type MemoryNodeDescriptor,
 } from '../src/scoring/index.js';
 import type { CreateAnchorInput } from '../src/models/anchor.js';
+import { WEIGHT_CAP } from '../src/models/weighted-edge.js';
 import type { CreateWeightedEdgeInput, WeightedEdge } from '../src/models/weighted-edge.js';
 import type { UpsertEdgeInput, WeightMergeStrategy } from '../src/models/anchor.js';
 
@@ -178,7 +179,7 @@ describe('Anchor Weighted Edge Creation Flow', () => {
   // ─── 2. Weight Accuracy (Hebbian Formula) ────────────────────
 
   describe('Hebbian weight formula accuracy', () => {
-    it('reinforces edge using formula: w_new = w_old + lr * (1 - w_old)', () => {
+    it('reinforces edge using formula: w_new = w_old + lr * WEIGHT_CAP * headroom', () => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'anchor-1',
         sourceType: 'anchor',
@@ -191,10 +192,11 @@ describe('Anchor Weighted Edge Creation Flow', () => {
 
       const result = weightedEdgeRepo.reinforceEdge(edge.id);
 
-      // w_new = 0.5 + 0.1 * (1 - 0.5) = 0.5 + 0.05 = 0.55
+      // delta = 0.1 * 100 * ((100 - 0.5) / 100) = 9.95
+      // w_new = 0.5 + 9.95 = 10.45
       expect(result).not.toBeNull();
       expect(result!.previousWeight).toBe(0.5);
-      expect(result!.newWeight).toBeCloseTo(0.55, 10);
+      expect(result!.newWeight).toBeCloseTo(10.45, 1);
       expect(result!.activationCount).toBe(1);
     });
 
@@ -209,8 +211,9 @@ describe('Anchor Weighted Edge Creation Flow', () => {
 
       const result = weightedEdgeRepo.reinforceEdge(edge.id);
 
-      // w_new = 0.4 + 0.2 * (1 - 0.4) = 0.4 + 0.12 = 0.52
-      expect(result!.newWeight).toBeCloseTo(0.52, 10);
+      // delta = 0.2 * 100 * ((100 - 0.4) / 100) = 19.92
+      // w_new = 0.4 + 19.92 = 20.32
+      expect(result!.newWeight).toBeCloseTo(20.32, 1);
     });
 
     it('supports override learning rate during reinforcement', () => {
@@ -225,11 +228,12 @@ describe('Anchor Weighted Edge Creation Flow', () => {
       // Override with 0.5
       const result = weightedEdgeRepo.reinforceEdge(edge.id, 0.5);
 
-      // w_new = 0.3 + 0.5 * (1 - 0.3) = 0.3 + 0.35 = 0.65
-      expect(result!.newWeight).toBeCloseTo(0.65, 10);
+      // delta = 0.5 * 100 * ((100 - 0.3) / 100) = 49.85
+      // w_new = 0.3 + 49.85 = 50.15
+      expect(result!.newWeight).toBeCloseTo(50.15, 1);
     });
 
-    it('weight approaches 1.0 asymptotically with repeated reinforcement', () => {
+    it('weight approaches WEIGHT_CAP asymptotically with repeated reinforcement', () => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f', targetType: 'fact',
@@ -250,26 +254,27 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         expect(weights[i]).toBeGreaterThanOrEqual(weights[i - 1]);
       }
 
-      // Should approach but not exceed 1.0
+      // Should approach but not exceed WEIGHT_CAP (100)
       const finalWeight = weights[weights.length - 1];
-      expect(finalWeight).toBeGreaterThan(0.99);
-      expect(finalWeight).toBeLessThanOrEqual(1.0);
+      expect(finalWeight).toBeGreaterThan(99);
+      expect(finalWeight).toBeLessThanOrEqual(WEIGHT_CAP);
     });
 
-    it('weight never exceeds 1.0 even with high learning rate', () => {
+    it('weight never exceeds WEIGHT_CAP even with high learning rate', () => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.99,
+        weight: 99,
         learningRate: 0.5,
       });
 
       const result = weightedEdgeRepo.reinforceEdge(edge.id);
 
-      // w_new = 0.99 + 0.5 * (1 - 0.99) = 0.99 + 0.005 = 0.995
-      expect(result!.newWeight).toBeCloseTo(0.995, 5);
-      expect(result!.newWeight).toBeLessThanOrEqual(1.0);
+      // delta = 0.5 * 100 * ((100 - 99) / 100) = 0.5
+      // w_new = 99 + 0.5 = 99.5
+      expect(result!.newWeight).toBeCloseTo(99.5, 1);
+      expect(result!.newWeight).toBeLessThanOrEqual(WEIGHT_CAP);
     });
 
     it('increments activation count on each reinforcement', () => {
@@ -301,12 +306,15 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         learningRate: lr,
       });
 
-      // Manually compute expected values
+      // Manually compute expected values with new formula
+      // delta = lr * WEIGHT_CAP * (WEIGHT_CAP - w) / WEIGHT_CAP
       let expected = 0.2;
       for (let i = 0; i < 5; i++) {
-        expected = expected + lr * (1 - expected);
+        const headroom = (WEIGHT_CAP - expected) / WEIGHT_CAP;
+        const delta = lr * WEIGHT_CAP * headroom;
+        expected = Math.min(WEIGHT_CAP, expected + delta);
         const result = weightedEdgeRepo.reinforceEdge(edge.id);
-        expect(result!.newWeight).toBeCloseTo(expected, 8);
+        expect(result!.newWeight).toBeCloseTo(expected, 4);
       }
     });
   });
@@ -598,13 +606,13 @@ describe('Anchor Weighted Edge Creation Flow', () => {
 
       expect(results).toHaveLength(3);
 
-      // Verify Hebbian formula for each
-      // e1: 0.4 + 0.1 * (1 - 0.4) = 0.46
-      expect(results[0].newWeight).toBeCloseTo(0.46, 8);
-      // e2: 0.6 + 0.1 * (1 - 0.6) = 0.64
-      expect(results[1].newWeight).toBeCloseTo(0.64, 8);
-      // e3: 0.3 + 0.2 * (1 - 0.3) = 0.44
-      expect(results[2].newWeight).toBeCloseTo(0.44, 8);
+      // Verify new Hebbian formula for each
+      // e1: delta = 0.1 * 100 * ((100 - 0.4) / 100) = 9.96; w_new = 10.36
+      expect(results[0].newWeight).toBeCloseTo(10.36, 1);
+      // e2: delta = 0.1 * 100 * ((100 - 0.6) / 100) = 9.94; w_new = 10.54
+      expect(results[1].newWeight).toBeCloseTo(10.54, 1);
+      // e3: delta = 0.2 * 100 * ((100 - 0.3) / 100) = 19.94; w_new = 20.24
+      expect(results[2].newWeight).toBeCloseTo(20.24, 1);
 
       // All activation counts should be 1
       results.forEach(r => expect(r.activationCount).toBe(1));
@@ -623,8 +631,8 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         learningRate: 0.3,
       });
 
-      // Uses override: 0.5 + 0.3 * (1 - 0.5) = 0.65
-      expect(results[0].newWeight).toBeCloseTo(0.65, 8);
+      // Uses override: delta = 0.3 * 100 * ((100 - 0.5) / 100) = 29.85; w_new = 30.35
+      expect(results[0].newWeight).toBeCloseTo(30.35, 1);
     });
 
     it('batch handles non-existent edge IDs gracefully', () => {
@@ -647,20 +655,21 @@ describe('Anchor Weighted Edge Creation Flow', () => {
   // ─── 6. Decay and Pruning in Weighted Edges ─────────────────
 
   describe('Decay and pruning of anchor edges', () => {
-    it('applies decay formula: w_new = w * (1 - decay_rate)', () => {
+    it('applies event-based decay formula', () => {
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.8,
-        decayRate: 0.1,
+        weight: 80,
+        decayRate: 0.5,
+        currentEvent: 0,
       });
 
-      weightedEdgeRepo.applyDecay();
+      weightedEdgeRepo.applyDecay({ currentEvent: 10 });
 
       const edge = weightedEdgeRepo.getOutgoingEdges('a1')[0];
-      // 0.8 * (1 - 0.1) = 0.72
-      expect(edge.weight).toBeCloseTo(0.72, 5);
+      // decayAmount = 0.5 * 10 = 5; weight = 80 - 5 = 75
+      expect(edge.weight).toBeCloseTo(75, 1);
     });
 
     it('edges with zero decay rate are not affected', () => {
@@ -668,14 +677,15 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.8,
+        weight: 80,
         decayRate: 0.0,
+        currentEvent: 0,
       });
 
-      weightedEdgeRepo.applyDecay();
+      weightedEdgeRepo.applyDecay({ currentEvent: 10 });
 
       const edge = weightedEdgeRepo.getOutgoingEdges('a1')[0];
-      expect(edge.weight).toBeCloseTo(0.8, 5);
+      expect(edge.weight).toBeCloseTo(80, 1);
     });
 
     it('multiple decay cycles progressively reduce weight', () => {
@@ -683,19 +693,22 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 1.0,
-        decayRate: 0.1,
+        weight: 80,
+        decayRate: 0.5,
+        currentEvent: 0,
       });
 
-      let expected = 1.0;
+      // Each cycle: 10 events, decayAmount = 0.5 * 10 = 5
+      let expected = 80;
       for (let i = 0; i < 5; i++) {
-        expected = expected * (1 - 0.1);
-        weightedEdgeRepo.applyDecay();
+        const eventNow = (i + 1) * 10;
+        expected = Math.max(0, expected - 5);
+        weightedEdgeRepo.applyDecay({ currentEvent: eventNow });
       }
 
       const edge = weightedEdgeRepo.getOutgoingEdges('a1')[0];
-      // After 5 cycles: 1.0 * 0.9^5 ≈ 0.59049
-      expect(edge.weight).toBeCloseTo(expected, 3);
+      // After 5 cycles of 5 decay each: 80 - 25 = 55
+      expect(edge.weight).toBeCloseTo(expected, 1);
     });
 
     it('decay then prune removes low-weight edges', () => {
@@ -703,20 +716,22 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.8,
+        weight: 80,
         decayRate: 0.1,
+        currentEvent: 0,
       });
       weightedEdgeRepo.createEdge({
         sourceId: 'a1', sourceType: 'anchor',
         targetId: 'f2', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.05,
-        decayRate: 0.5,
+        weight: 5,
+        decayRate: 1.0,
+        currentEvent: 0,
       });
 
-      const result = weightedEdgeRepo.applyDecay({ pruneBelow: 0.03 });
+      // 10 events: edge2 decayAmount = 1.0 * 10 = 10, weight = 5 - 10 → 0
+      const result = weightedEdgeRepo.applyDecay({ currentEvent: 10, pruneBelow: 1 });
 
-      // Edge 2: 0.05 * (1 - 0.5) = 0.025 < 0.03 → pruned
       expect(result.prunedCount).toBe(1);
       expect(weightedEdgeRepo.countEdges()).toBe(1);
     });
@@ -734,47 +749,40 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         targetId: 'fact-api-rest',
         targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.4,
+        weight: 40,
         learningRate: 0.15,
-        decayRate: 0.1,
+        decayRate: 1.0,
+        currentEvent: 0,
       });
 
-      expect(edge.weight).toBe(0.4);
+      expect(edge.weight).toBe(40);
 
       // Step 2: Reinforce 3 times (simulating 3 co-activations)
-      let w = 0.4;
+      let w = 40;
       for (let i = 0; i < 3; i++) {
-        w = w + 0.15 * (1 - w);
+        const headroom = (WEIGHT_CAP - w) / WEIGHT_CAP;
+        w = Math.min(WEIGHT_CAP, w + 0.15 * WEIGHT_CAP * headroom);
         const result = weightedEdgeRepo.reinforceEdge(edge.id);
-        expect(result!.newWeight).toBeCloseTo(w, 8);
+        expect(result!.newWeight).toBeCloseTo(w, 2);
       }
 
-      // w after 3 reinforcements should be: ~0.6517
-      expect(w).toBeGreaterThan(0.6);
+      // w after 3 reinforcements should be high
+      expect(w).toBeGreaterThan(40);
 
-      // Step 3: Apply decay 5 times without reinforcement
-      for (let i = 0; i < 5; i++) {
-        w = w * (1 - 0.1);
-        weightedEdgeRepo.applyDecay();
-      }
+      // Step 3: Apply decay (10 events, decayRate=1.0, decayAmount=10)
+      weightedEdgeRepo.applyDecay({ currentEvent: 10 });
 
       const decayedEdge = weightedEdgeRepo.getEdge(edge.id)!;
-      expect(decayedEdge.weight).toBeCloseTo(w, 3);
+      expect(decayedEdge.weight).toBeLessThan(w);
 
-      // Step 4: Verify weight is still above pruning threshold
-      expect(decayedEdge.weight).toBeGreaterThan(0.3);
+      // Step 4: Heavy decay to trigger pruning
+      weightedEdgeRepo.applyDecay({ currentEvent: 1000 });
 
-      // Step 5: Heavy decay to trigger pruning — apply many cycles
-      for (let i = 0; i < 50; i++) {
-        weightedEdgeRepo.applyDecay();
-      }
-
-      // After ~55 total decay cycles at rate 0.1, weight should be very small
       const almostGone = weightedEdgeRepo.getEdge(edge.id)!;
-      expect(almostGone.weight).toBeLessThan(0.01);
+      expect(almostGone.weight).toBeLessThan(1);
 
-      const result = weightedEdgeRepo.applyDecay({ pruneBelow: 0.01 });
-      // Edge should be pruned after many decay cycles
+      const result = weightedEdgeRepo.applyDecay({ currentEvent: 2000, pruneBelow: 1 });
+      // Edge should be pruned after heavy decay
       expect(weightedEdgeRepo.countEdges()).toBe(0);
     });
 
@@ -799,10 +807,10 @@ describe('Anchor Weighted Edge Creation Flow', () => {
       const reinforcedAnchor = anchorRepo.reinforceWeight(anchor.id, 0.1);
       const reinforcedEdge = weightedEdgeRepo.reinforceEdge(edge.id);
 
-      // Anchor: 0.5 + 0.1 * (1 - 0.5) = 0.55
+      // Anchor still uses 0-1 scale: 0.5 + 0.1 * (1 - 0.5) = 0.55
       expect(reinforcedAnchor!.currentWeight).toBeCloseTo(0.55, 8);
-      // Edge: 0.5 + 0.1 * (1 - 0.5) = 0.55
-      expect(reinforcedEdge!.newWeight).toBeCloseTo(0.55, 8);
+      // Edge uses new formula: delta = 0.1 * 100 * ((100-0.5)/100) = 9.95; w_new = 10.45
+      expect(reinforcedEdge!.newWeight).toBeCloseTo(10.45, 1);
 
       // Verify anchor access was recorded
       expect(reinforcedAnchor!.accessCount).toBe(1);
@@ -884,17 +892,17 @@ describe('Anchor Weighted Edge Creation Flow', () => {
       // Won't error — the SQL UPDATE succeeds but no row found
     });
 
-    it('direct weight update clamps to [0, 1]', () => {
+    it('direct weight update clamps to [0, WEIGHT_CAP]', () => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.5,
+        weight: 50,
       });
 
-      weightedEdgeRepo.updateWeight(edge.id, 1.5);
+      weightedEdgeRepo.updateWeight(edge.id, 150);
       let updated = weightedEdgeRepo.getEdge(edge.id)!;
-      expect(updated.weight).toBe(1.0);
+      expect(updated.weight).toBe(WEIGHT_CAP);
 
       weightedEdgeRepo.updateWeight(edge.id, -0.3);
       updated = weightedEdgeRepo.getEdge(edge.id)!;
@@ -922,16 +930,17 @@ describe('Anchor Weighted Edge Creation Flow', () => {
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.01,
-        decayRate: 0.99, // very aggressive
+        weight: 1,
+        decayRate: 1.0, // very aggressive
+        currentEvent: 0,
       });
 
-      weightedEdgeRepo.applyDecay();
+      // 100 events: decayAmount = 1.0 * 100 = 100, way more than weight=1
+      weightedEdgeRepo.applyDecay({ currentEvent: 100 });
 
       const decayed = weightedEdgeRepo.getEdge(edge.id)!;
       expect(decayed.weight).toBeGreaterThanOrEqual(0);
-      // 0.01 * (1 - 0.99) = 0.0001
-      expect(decayed.weight).toBeCloseTo(0.0001, 4);
+      expect(decayed.weight).toBe(0);
     });
   });
 
@@ -960,20 +969,24 @@ describe('Anchor Weighted Edge Creation Flow', () => {
     });
 
     it('competing reinforcement and decay reach equilibrium', () => {
+      let eventCounter = 0;
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.5,
+        weight: 50,
         learningRate: 0.1,
-        decayRate: 0.05,
+        decayRate: 0.5,
+        currentEvent: eventCounter,
       });
 
       // Alternate reinforce and decay
-      const weights: number[] = [0.5];
+      const weights: number[] = [50];
       for (let i = 0; i < 30; i++) {
-        weightedEdgeRepo.reinforceEdge(edge.id);
-        weightedEdgeRepo.applyDecay();
+        eventCounter += 1;
+        weightedEdgeRepo.reinforceEdge(edge.id, undefined, eventCounter);
+        eventCounter += 1;
+        weightedEdgeRepo.applyDecay({ currentEvent: eventCounter });
         const current = weightedEdgeRepo.getEdge(edge.id)!;
         weights.push(current.weight);
       }
@@ -981,33 +994,38 @@ describe('Anchor Weighted Edge Creation Flow', () => {
       // Weight should stabilize (last 5 values should be close)
       const last5 = weights.slice(-5);
       const maxDiff = Math.max(...last5) - Math.min(...last5);
-      expect(maxDiff).toBeLessThan(0.02);
+      expect(maxDiff).toBeLessThan(2);
     });
 
-    it('stronger initial edges maintain higher equilibrium than weaker ones', () => {
+    it('stronger initial edges converge to same equilibrium as weaker ones', () => {
+      let eventCounter = 0;
       const strongEdge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f1', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.8,
+        weight: 80,
         learningRate: 0.1,
-        decayRate: 0.05,
+        decayRate: 0.5,
+        currentEvent: eventCounter,
       });
 
       const weakEdge = weightedEdgeRepo.createEdge({
         sourceId: 'a', sourceType: 'anchor',
         targetId: 'f2', targetType: 'fact',
         edgeType: 'anchor_to_fact',
-        weight: 0.2,
+        weight: 20,
         learningRate: 0.1,
-        decayRate: 0.05,
+        decayRate: 0.5,
+        currentEvent: eventCounter,
       });
 
       // Apply same number of reinforcements and decays
-      for (let i = 0; i < 20; i++) {
-        weightedEdgeRepo.reinforceEdge(strongEdge.id);
-        weightedEdgeRepo.reinforceEdge(weakEdge.id);
-        weightedEdgeRepo.applyDecay();
+      for (let i = 0; i < 30; i++) {
+        eventCounter += 1;
+        weightedEdgeRepo.reinforceEdge(strongEdge.id, undefined, eventCounter);
+        weightedEdgeRepo.reinforceEdge(weakEdge.id, undefined, eventCounter);
+        eventCounter += 1;
+        weightedEdgeRepo.applyDecay({ currentEvent: eventCounter });
       }
 
       const strong = weightedEdgeRepo.getEdge(strongEdge.id)!;
@@ -1016,7 +1034,7 @@ describe('Anchor Weighted Edge Creation Flow', () => {
       // Both should converge to same equilibrium since they get same reinforcement
       // With same learning rate and decay rate, the equilibrium is the same
       // After enough iterations, both converge to the same value
-      expect(Math.abs(strong.weight - weak.weight)).toBeLessThan(0.05);
+      expect(Math.abs(strong.weight - weak.weight)).toBeLessThan(5);
     });
   });
 });

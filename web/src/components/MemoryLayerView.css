@@ -1,0 +1,161 @@
+/**
+ * MemoryLayerView — Bulk controls & enhanced layer interaction styles.
+ *
+ * Supplements the base mlv-* styles in index.css with:
+ *   - Bulk expand/collapse toolbar
+ *   - Depth button group
+ *   - Expanded node count indicator
+ *   - Layer transition animations
+ */
+
+/* ─── Bulk Controls Toolbar ─── */
+
+.mlv-bulk-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 52, 96, 0.18);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.mlv-bulk-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.mlv-bulk-depth-btns {
+  display: flex;
+  gap: 0;
+}
+
+.mlv-bulk-depth-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mlv-bulk-depth-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.mlv-bulk-depth-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.mlv-bulk-depth-btn:not(:first-child) {
+  border-left: none;
+}
+
+.mlv-bulk-depth-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.mlv-bulk-depth-active {
+  background: rgba(74, 158, 255, 0.08) !important;
+  font-weight: 700;
+}
+
+.mlv-bulk-collapse-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  background: rgba(225, 112, 85, 0.08);
+  border: 1px solid rgba(225, 112, 85, 0.25);
+  border-radius: 4px;
+  color: #e17055;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.mlv-bulk-collapse-btn:hover {
+  background: rgba(225, 112, 85, 0.15);
+  border-color: rgba(225, 112, 85, 0.4);
+}
+
+/* ─── Enhanced Layer Panel Transitions ─── */
+
+.mlv-layer-panel {
+  animation: mlvPanelExpand 0.2s ease-out;
+}
+
+@keyframes mlvPanelExpand {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    max-height: 600px;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Layer Content Fade-in on Tab Switch ─── */
+
+.mlv-layer-content {
+  animation: mlvLayerFadeIn 0.15s ease-out;
+}
+
+@keyframes mlvLayerFadeIn {
+  from { opacity: 0.5; }
+  to   { opacity: 1; }
+}
+
+/* ─── Keyboard focus indicators ─── */
+
+.mlv-node-row:focus-within {
+  outline: 1px solid rgba(74, 158, 255, 0.3);
+  outline-offset: -1px;
+}
+
+.mlv-expand-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mlv-layer-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ─── Loading shimmer for bulk expand ─── */
+
+.mlv-node-row.mlv-node-expanded .mlv-layer-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.mlv-node-row.mlv-node-expanded .mlv-layer-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(74, 158, 255, 0.04),
+    transparent
+  );
+  animation: mlvShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes mlvShimmer {
+  to { left: 100%; }
+}

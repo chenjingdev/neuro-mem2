@@ -7,12 +7,22 @@
  *   - 'markdown': Markdown sections (universal)
  *   - 'json': JSON structure (for programmatic consumption)
  *
- * The formatter groups memory items by type (fact, episode, concept)
- * and orders them by relevance score descending.
+ * Groups memory items by MemoryNode nodeType:
+ *   semantic / episodic / procedural / prospective / emotional / hub
+ *
+ * Progressive depth (4-layer) support:
+ *   L0 — frontmatter (one-line label)
+ *   L1 — metadata (structured JSON: entities, category, SPO, etc.)
+ *   L2 — summary (human-readable summary)
+ *   L3 — sourceMessageIds (raw conversation references)
+ *
+ * The formatter selects display content based on the depthLevel field
+ * present on each MergedMemoryItem.
  */
 
-import type { MergedMemoryItem } from '../../retrieval/types.js';
+import type { MergedMemoryItem, DepthLevel } from '../../retrieval/types.js';
 import type { RecallResult } from '../../retrieval/dual-path-retriever.js';
+import type { MemoryNodeMetadata } from '../../models/memory-node.js';
 
 // ─── Configuration ───────────────────────────────────────
 
@@ -31,6 +41,8 @@ export interface ContextFormatterConfig {
   includeScores: boolean;
   /** Whether to include retrieval source info (default: false) */
   includeSources: boolean;
+  /** Whether to include L1 metadata in output when available (default: false) */
+  includeMetadata: boolean;
   /** Custom header/preamble text (default: built-in preamble) */
   preamble?: string;
 }
@@ -42,15 +54,26 @@ export const DEFAULT_FORMATTER_CONFIG: ContextFormatterConfig = {
   maxItems: 15,
   includeScores: false,
   includeSources: false,
+  includeMetadata: false,
 };
 
-// ─── Grouped Items ───────────────────────────────────────
+// ─── Node type groups (MemoryNode 4-layer model) ─────────
+
+/** All MemoryNode nodeType groups + hub role */
+const NODE_TYPE_GROUPS = [
+  'semantic', 'episodic', 'procedural', 'prospective', 'emotional', 'hub', 'other',
+] as const;
+
+type NodeTypeGroup = typeof NODE_TYPE_GROUPS[number];
 
 interface GroupedMemoryItems {
-  facts: MergedMemoryItem[];
-  episodes: MergedMemoryItem[];
-  concepts: MergedMemoryItem[];
-  others: MergedMemoryItem[];
+  semantic: MergedMemoryItem[];
+  episodic: MergedMemoryItem[];
+  procedural: MergedMemoryItem[];
+  prospective: MergedMemoryItem[];
+  emotional: MergedMemoryItem[];
+  hub: MergedMemoryItem[];
+  other: MergedMemoryItem[];
 }
 
 // ─── Formatter Output ────────────────────────────────────
@@ -97,8 +120,8 @@ export class ContextFormatter {
       return { text: '', itemCount: 0, truncated: false, format: cfg.format };
     }
 
-    // Group by type
-    const grouped = groupByType(filtered);
+    // Group by MemoryNode type/role
+    const grouped = groupByNodeType(filtered);
 
     // Format based on output format
     let text: string;
@@ -132,33 +155,113 @@ export class ContextFormatter {
   }
 }
 
+// ─── Progressive Depth Content Selection ─────────────────
+
+/**
+ * Select the appropriate display content for an item based on its progressive depth level.
+ *
+ * L0 → frontmatter (one-line label)
+ * L1 → frontmatter + metadata summary
+ * L2 → summary text (or full content if no summary)
+ * L3 → full content (with source references)
+ */
+function getDepthContent(item: MergedMemoryItem): string {
+  const depth = item.depthLevel ?? 'L2';
+
+  switch (depth) {
+    case 'L0':
+      return item.frontmatter ?? item.content;
+    case 'L1': {
+      const fm = item.frontmatter ?? item.content;
+      if (item.nodeMetadata) {
+        const metaSummary = formatMetadataInline(item.nodeMetadata);
+        return metaSummary ? `${fm} — ${metaSummary}` : fm;
+      }
+      return fm;
+    }
+    case 'L2':
+      return item.summary ?? item.content;
+    case 'L3':
+    default:
+      return item.content;
+  }
+}
+
+/**
+ * Format L1 metadata into a compact inline string.
+ */
+function formatMetadataInline(meta: MemoryNodeMetadata): string {
+  const parts: string[] = [];
+  if (meta.category) parts.push(meta.category);
+  if (meta.subject && meta.predicate && meta.object) {
+    parts.push(`${meta.subject} ${meta.predicate} ${meta.object}`);
+  }
+  if (meta.entities?.length) parts.push(`entities: ${meta.entities.join(', ')}`);
+  if (meta.emotion) parts.push(`emotion: ${meta.emotion}`);
+  if (meta.priority) parts.push(`priority: ${meta.priority}`);
+  if (meta.status) parts.push(`status: ${meta.status}`);
+  return parts.join('; ');
+}
+
 // ─── Grouping ────────────────────────────────────────────
 
-function groupByType(items: MergedMemoryItem[]): GroupedMemoryItems {
+function groupByNodeType(items: MergedMemoryItem[]): GroupedMemoryItems {
   const grouped: GroupedMemoryItems = {
-    facts: [],
-    episodes: [],
-    concepts: [],
-    others: [],
+    semantic: [],
+    episodic: [],
+    procedural: [],
+    prospective: [],
+    emotional: [],
+    hub: [],
+    other: [],
   };
 
   for (const item of items) {
-    switch (item.nodeType) {
-      case 'fact':
-        grouped.facts.push(item);
-        break;
-      case 'episode':
-        grouped.episodes.push(item);
-        break;
-      case 'concept':
-        grouped.concepts.push(item);
-        break;
-      default:
-        grouped.others.push(item);
+    // Check retrievalMetadata for nodeRole to identify hubs
+    const nodeRole = item.retrievalMetadata?.nodeRole as string | undefined;
+    if (nodeRole === 'hub') {
+      grouped.hub.push(item);
+      continue;
+    }
+
+    const nodeType = item.nodeType as string;
+    switch (nodeType) {
+      case 'semantic':  grouped.semantic.push(item);    break;
+      case 'episodic':  grouped.episodic.push(item);    break;
+      case 'procedural': grouped.procedural.push(item); break;
+      case 'prospective': grouped.prospective.push(item); break;
+      case 'emotional': grouped.emotional.push(item);   break;
+      default:          grouped.other.push(item);        break;
     }
   }
 
   return grouped;
+}
+
+/** Display name for each node type group */
+function groupDisplayName(group: NodeTypeGroup): string {
+  switch (group) {
+    case 'semantic':    return 'Semantic Knowledge';
+    case 'episodic':    return 'Episodes';
+    case 'procedural':  return 'Procedures';
+    case 'prospective': return 'Plans & Intentions';
+    case 'emotional':   return 'Emotional Context';
+    case 'hub':         return 'Key Concepts (Hubs)';
+    case 'other':       return 'Other';
+  }
+}
+
+/** Singular XML tag for each node type group */
+function singularTag(group: NodeTypeGroup): string {
+  switch (group) {
+    case 'semantic':    return 'knowledge';
+    case 'episodic':    return 'episode';
+    case 'procedural':  return 'procedure';
+    case 'prospective': return 'plan';
+    case 'emotional':   return 'emotion';
+    case 'hub':         return 'hub';
+    case 'other':       return 'memory';
+  }
 }
 
 // ─── XML Format ──────────────────────────────────────────
@@ -170,36 +273,16 @@ function formatXml(grouped: GroupedMemoryItems, cfg: ContextFormatterConfig): st
   lines.push('<memory_context>');
   lines.push(`<preamble>${escapeXml(preamble)}</preamble>`);
 
-  if (grouped.facts.length > 0) {
-    lines.push('<facts>');
-    for (const item of grouped.facts) {
-      lines.push(formatXmlItem(item, 'fact', cfg));
-    }
-    lines.push('</facts>');
-  }
+  for (const group of NODE_TYPE_GROUPS) {
+    const items = grouped[group];
+    if (items.length === 0) continue;
 
-  if (grouped.episodes.length > 0) {
-    lines.push('<episodes>');
-    for (const item of grouped.episodes) {
-      lines.push(formatXmlItem(item, 'episode', cfg));
+    lines.push(`<${group}>`);
+    for (const item of items) {
+      const tag = singularTag(group);
+      lines.push(formatXmlItem(item, tag, cfg));
     }
-    lines.push('</episodes>');
-  }
-
-  if (grouped.concepts.length > 0) {
-    lines.push('<concepts>');
-    for (const item of grouped.concepts) {
-      lines.push(formatXmlItem(item, 'concept', cfg));
-    }
-    lines.push('</concepts>');
-  }
-
-  if (grouped.others.length > 0) {
-    lines.push('<other>');
-    for (const item of grouped.others) {
-      lines.push(formatXmlItem(item, 'memory', cfg));
-    }
-    lines.push('</other>');
+    lines.push(`</${group}>`);
   }
 
   lines.push('</memory_context>');
@@ -212,11 +295,35 @@ function formatXmlItem(
   cfg: ContextFormatterConfig,
 ): string {
   const attrs: string[] = [];
+  const depth = item.depthLevel ?? 'L2';
+  attrs.push(`depth="${depth}"`);
   if (cfg.includeScores) attrs.push(`score="${item.score.toFixed(3)}"`);
   if (cfg.includeSources) attrs.push(`sources="${item.sources.join(',')}"`);
 
-  const attrStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
-  return `<${tag}${attrStr}>${escapeXml(item.content)}</${tag}>`;
+  const attrStr = ' ' + attrs.join(' ');
+  const displayContent = getDepthContent(item);
+
+  // For L1+ with metadata, include structured metadata as child elements
+  if (cfg.includeMetadata && item.nodeMetadata && (depth === 'L1' || depth === 'L2' || depth === 'L3')) {
+    const metaLines: string[] = [];
+    metaLines.push(`  <${tag}${attrStr}>`);
+    metaLines.push(`    <text>${escapeXml(displayContent)}</text>`);
+    metaLines.push(`    <metadata>`);
+    if (item.nodeMetadata.entities?.length) {
+      metaLines.push(`      <entities>${escapeXml(item.nodeMetadata.entities.join(', '))}</entities>`);
+    }
+    if (item.nodeMetadata.category) {
+      metaLines.push(`      <category>${escapeXml(item.nodeMetadata.category)}</category>`);
+    }
+    if (item.nodeMetadata.subject && item.nodeMetadata.predicate && item.nodeMetadata.object) {
+      metaLines.push(`      <spo>${escapeXml(item.nodeMetadata.subject)} ${escapeXml(item.nodeMetadata.predicate)} ${escapeXml(item.nodeMetadata.object)}</spo>`);
+    }
+    metaLines.push(`    </metadata>`);
+    metaLines.push(`  </${tag}>`);
+    return metaLines.join('\n');
+  }
+
+  return `  <${tag}${attrStr}>${escapeXml(displayContent)}</${tag}>`;
 }
 
 function escapeXml(text: string): string {
@@ -238,33 +345,12 @@ function formatMarkdown(grouped: GroupedMemoryItems, cfg: ContextFormatterConfig
   lines.push(preamble);
   lines.push('');
 
-  if (grouped.facts.length > 0) {
-    lines.push('### Facts');
-    for (const item of grouped.facts) {
-      lines.push(formatMarkdownItem(item, cfg));
-    }
-    lines.push('');
-  }
+  for (const group of NODE_TYPE_GROUPS) {
+    const items = grouped[group];
+    if (items.length === 0) continue;
 
-  if (grouped.episodes.length > 0) {
-    lines.push('### Episodes');
-    for (const item of grouped.episodes) {
-      lines.push(formatMarkdownItem(item, cfg));
-    }
-    lines.push('');
-  }
-
-  if (grouped.concepts.length > 0) {
-    lines.push('### Concepts');
-    for (const item of grouped.concepts) {
-      lines.push(formatMarkdownItem(item, cfg));
-    }
-    lines.push('');
-  }
-
-  if (grouped.others.length > 0) {
-    lines.push('### Other');
-    for (const item of grouped.others) {
+    lines.push(`### ${groupDisplayName(group)}`);
+    for (const item of items) {
       lines.push(formatMarkdownItem(item, cfg));
     }
     lines.push('');
@@ -274,10 +360,22 @@ function formatMarkdown(grouped: GroupedMemoryItems, cfg: ContextFormatterConfig
 }
 
 function formatMarkdownItem(item: MergedMemoryItem, cfg: ContextFormatterConfig): string {
+  const displayContent = getDepthContent(item);
   let suffix = '';
+  const depth = item.depthLevel ?? 'L2';
   if (cfg.includeScores) suffix += ` (score: ${item.score.toFixed(3)})`;
   if (cfg.includeSources) suffix += ` [${item.sources.join(', ')}]`;
-  return `- ${item.content}${suffix}`;
+  suffix += ` \`${depth}\``;
+
+  let line = `- ${displayContent}${suffix}`;
+
+  // For L1+ with metadata, include key metadata inline
+  if (cfg.includeMetadata && item.nodeMetadata) {
+    const metaSummary = formatMetadataInline(item.nodeMetadata);
+    if (metaSummary) line += `\n  > ${metaSummary}`;
+  }
+
+  return line;
 }
 
 // ─── JSON Format ─────────────────────────────────────────
@@ -285,15 +383,24 @@ function formatMarkdownItem(item: MergedMemoryItem, cfg: ContextFormatterConfig)
 function formatJson(grouped: GroupedMemoryItems, cfg: ContextFormatterConfig): string {
   const output: Record<string, unknown[]> = {};
 
-  for (const [key, items] of Object.entries(grouped)) {
-    if ((items as MergedMemoryItem[]).length > 0) {
-      output[key] = (items as MergedMemoryItem[]).map(item => {
-        const entry: Record<string, unknown> = { content: item.content };
-        if (cfg.includeScores) entry.score = item.score;
-        if (cfg.includeSources) entry.sources = item.sources;
-        return entry;
-      });
-    }
+  for (const group of NODE_TYPE_GROUPS) {
+    const items = grouped[group];
+    if (items.length === 0) continue;
+
+    output[group] = items.map(item => {
+      const depth = item.depthLevel ?? 'L2';
+      const entry: Record<string, unknown> = {
+        content: getDepthContent(item),
+        depthLevel: depth,
+        nodeType: item.nodeType,
+      };
+      if (item.frontmatter) entry.frontmatter = item.frontmatter;
+      if (item.summary && depth !== 'L0') entry.summary = item.summary;
+      if (cfg.includeScores) entry.score = item.score;
+      if (cfg.includeSources) entry.sources = item.sources;
+      if (cfg.includeMetadata && item.nodeMetadata) entry.metadata = item.nodeMetadata;
+      return entry;
+    });
   }
 
   return JSON.stringify({ memoryContext: output }, null, 2);

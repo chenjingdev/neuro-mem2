@@ -903,12 +903,10 @@ async function executePipeline(
         const extractionInput: FactExtractionInput = {
           conversationId,
           userMessage: {
-            id: uuidv4(),
             content: request.message,
             turnIndex: (request.history?.length ?? 0),
           },
           assistantMessage: {
-            id: uuidv4(),
             content: fullResponse,
             turnIndex: (request.history?.length ?? 0) + 1,
           },
@@ -948,7 +946,7 @@ async function executePipeline(
               deps.factRepo.createMany(
                 ingestionResult.facts.map(f => ({
                   conversationId: persistedConvId,
-                  sourceMessageIds: [extractionInput.userMessage.id, extractionInput.assistantMessage.id],
+                  sourceMessageIds: [`${persistedConvId}:${extractionInput.userMessage.turnIndex}`, `${persistedConvId}:${extractionInput.assistantMessage.turnIndex}`],
                   sourceTurnIndex: extractionInput.userMessage.turnIndex,
                   content: f.content,
                   category: f.category ?? 'general',
@@ -968,7 +966,7 @@ async function executePipeline(
             void deps.eventBus.emit({
               type: 'facts.extracted' as const,
               conversationId,
-              sourceMessageId: extractionInput.assistantMessage.id,
+              sourceTurnIndex: extractionInput.assistantMessage.turnIndex,
               facts: ingestionResult.facts,
               timestamp: new Date().toISOString(),
             });
@@ -999,7 +997,7 @@ async function executePipeline(
             void deps.eventBus.emit({
               type: 'extraction.error' as const,
               conversationId,
-              sourceMessageId: extractionInput.assistantMessage.id,
+              sourceTurnIndex: extractionInput.assistantMessage.turnIndex,
               error: ingestionResult.error ?? 'Unknown extraction error',
               timestamp: new Date().toISOString(),
             });

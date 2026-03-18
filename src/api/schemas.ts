@@ -57,13 +57,11 @@ export interface IngestResponse {
   updatedAt: string;
 }
 
-/** Response for append message endpoint */
+/** Response for append message endpoint — turn-based composite key */
 export interface AppendMessageResponse {
-  /** Message ID */
-  messageId: string;
-  /** Conversation ID */
+  /** Conversation ID (part of composite PK) */
   conversationId: string;
-  /** Turn index of the appended message */
+  /** Turn index of the appended message (part of composite PK) */
   turnIndex: number;
   /** ISO 8601 timestamp */
   createdAt: string;
@@ -116,6 +114,136 @@ export interface RecallItemSchema {
     vector?: number;
     graph?: number;
   };
+}
+
+// ─── Hybrid Search Schemas ───────────────────────────────
+
+/** POST /search/hybrid — FTS5 + vector hybrid search on MemoryNode */
+export interface HybridSearchRequest {
+  /** Query text for hybrid search (한영 혼용 supported) */
+  query: string;
+  /** Maximum number of results (default: 20) */
+  topK?: number;
+  /** Minimum combined score threshold [0, 1] (default: 0.1) */
+  minScore?: number;
+  /** Weight for FTS5 BM25 signal [0, 1] (default: 0.3, vector = 1 - ftsWeight) */
+  ftsWeight?: number;
+  /** Filter by node type(s) */
+  nodeTypeFilter?: string | string[];
+  /** Filter by node role */
+  nodeRoleFilter?: string;
+  /** Whether to apply event-based decay (default: true) */
+  applyDecay?: boolean;
+  /** Whether to include search performance stats (default: false) */
+  includeStats?: boolean;
+  /** Current global event counter (for decay computation) */
+  currentEventCounter?: number;
+}
+
+/** Response for hybrid search endpoint */
+export interface HybridSearchResponse {
+  /** Ranked list of search results */
+  items: HybridSearchItemSchema[];
+  /** Total number of results */
+  totalItems: number;
+  /** Query that was executed */
+  query: string;
+  /** Optional search performance stats (only if includeStats=true) */
+  stats?: Record<string, unknown>;
+}
+
+/** Single item in hybrid search response */
+export interface HybridSearchItemSchema {
+  /** Memory node ID */
+  nodeId: string;
+  /** Node type */
+  nodeType: string | null;
+  /** Node role */
+  nodeRole: string;
+  /** One-line frontmatter label */
+  frontmatter: string;
+  /** Combined score [0, 1] */
+  score: number;
+  /** Score breakdown */
+  scoreBreakdown: {
+    ftsScore: number;
+    vectorScore: number;
+    decayFactor: number;
+    combinedBeforeDecay: number;
+  };
+  /** Which stage contributed this result */
+  source: string;
+}
+
+const VALID_NODE_TYPES = ['semantic', 'episodic', 'procedural', 'prospective', 'emotional'];
+const VALID_NODE_ROLES = ['hub', 'leaf'];
+
+/**
+ * Validate a HybridSearchRequest body.
+ */
+export function validateHybridSearchRequest(body: unknown): ValidationError[] {
+  const errors: ValidationError[] = [];
+  if (!body || typeof body !== 'object') {
+    errors.push({ field: 'body', message: 'Request body must be a JSON object' });
+    return errors;
+  }
+
+  const data = body as Record<string, unknown>;
+
+  if (!data.query || typeof data.query !== 'string') {
+    errors.push({ field: 'query', message: 'query is required and must be a string' });
+  } else if (data.query.trim().length === 0) {
+    errors.push({ field: 'query', message: 'query must not be empty' });
+  }
+
+  if (data.topK !== undefined) {
+    if (typeof data.topK !== 'number' || data.topK < 1 || data.topK > 100) {
+      errors.push({ field: 'topK', message: 'topK must be a number between 1 and 100' });
+    }
+  }
+
+  if (data.minScore !== undefined) {
+    if (typeof data.minScore !== 'number' || data.minScore < 0 || data.minScore > 1) {
+      errors.push({ field: 'minScore', message: 'minScore must be a number between 0 and 1' });
+    }
+  }
+
+  if (data.ftsWeight !== undefined) {
+    if (typeof data.ftsWeight !== 'number' || data.ftsWeight < 0 || data.ftsWeight > 1) {
+      errors.push({ field: 'ftsWeight', message: 'ftsWeight must be a number between 0 and 1' });
+    }
+  }
+
+  if (data.nodeTypeFilter !== undefined) {
+    if (typeof data.nodeTypeFilter === 'string') {
+      if (!VALID_NODE_TYPES.includes(data.nodeTypeFilter)) {
+        errors.push({ field: 'nodeTypeFilter', message: `nodeTypeFilter must be one of: ${VALID_NODE_TYPES.join(', ')}` });
+      }
+    } else if (Array.isArray(data.nodeTypeFilter)) {
+      for (const t of data.nodeTypeFilter) {
+        if (typeof t !== 'string' || !VALID_NODE_TYPES.includes(t)) {
+          errors.push({ field: 'nodeTypeFilter', message: `Each nodeTypeFilter must be one of: ${VALID_NODE_TYPES.join(', ')}` });
+          break;
+        }
+      }
+    } else {
+      errors.push({ field: 'nodeTypeFilter', message: 'nodeTypeFilter must be a string or array of strings' });
+    }
+  }
+
+  if (data.nodeRoleFilter !== undefined) {
+    if (typeof data.nodeRoleFilter !== 'string' || !VALID_NODE_ROLES.includes(data.nodeRoleFilter)) {
+      errors.push({ field: 'nodeRoleFilter', message: `nodeRoleFilter must be one of: ${VALID_NODE_ROLES.join(', ')}` });
+    }
+  }
+
+  if (data.currentEventCounter !== undefined) {
+    if (typeof data.currentEventCounter !== 'number' || data.currentEventCounter < 0) {
+      errors.push({ field: 'currentEventCounter', message: 'currentEventCounter must be a non-negative number' });
+    }
+  }
+
+  return errors;
 }
 
 // ─── Error Schema ────────────────────────────────────────

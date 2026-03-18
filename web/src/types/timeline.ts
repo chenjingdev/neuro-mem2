@@ -35,6 +35,97 @@ export type TopLevelStage =
  */
 export type TimelineStage = RecallSubStage | TopLevelStage;
 
+// ─── MemoryNode Depth Layers ────────────────────────────────
+
+/**
+ * MemoryNode 4-layer progressive depth classification.
+ *
+ * Maps to the MemoryNode data model:
+ *   flash (L0) — anchor/embedding/keywords: fastest retrieval, lightest data
+ *   short (L1) — JSON metadata: structured entities, categories, SPO triples
+ *   mid   (L2) — summary: human-readable text summary
+ *   long  (L3) — source references: links back to original conversation turns
+ *
+ * Pipeline stages are tagged with the depth layer they primarily operate on,
+ * enabling visual grouping and color-coding in the timeline UI.
+ */
+export type DepthLayer = 'flash' | 'short' | 'mid' | 'long';
+
+/** Human-readable labels for depth layers. */
+export const DEPTH_LAYER_LABELS: Readonly<Record<DepthLayer, string>> = {
+  flash: 'L0 Flash',
+  short: 'L1 Short',
+  mid: 'L2 Mid',
+  long: 'L3 Long',
+};
+
+/** Colors for each depth layer (gradient from hot → cool). */
+export const DEPTH_LAYER_COLORS: Readonly<Record<DepthLayer, string>> = {
+  flash: '#ff6b6b',   // Hot red — ephemeral, fastest
+  short: '#ffa502',   // Orange — structured metadata
+  mid: '#2ed573',     // Green — summary context
+  long: '#1e90ff',    // Blue — deep historical
+};
+
+/** Background tint colors (low opacity) for each depth layer. */
+export const DEPTH_LAYER_BG: Readonly<Record<DepthLayer, string>> = {
+  flash: 'rgba(255, 107, 107, 0.08)',
+  short: 'rgba(255, 165, 2, 0.08)',
+  mid: 'rgba(46, 213, 115, 0.08)',
+  long: 'rgba(30, 144, 255, 0.08)',
+};
+
+/** Border-left accent colors for depth layer indicators. */
+export const DEPTH_LAYER_BORDER: Readonly<Record<DepthLayer, string>> = {
+  flash: 'rgba(255, 107, 107, 0.5)',
+  short: 'rgba(255, 165, 2, 0.5)',
+  mid: 'rgba(46, 213, 115, 0.5)',
+  long: 'rgba(30, 144, 255, 0.5)',
+};
+
+/** Icons for depth layers. */
+export const DEPTH_LAYER_ICONS: Readonly<Record<DepthLayer, string>> = {
+  flash: '⚡',
+  short: '📋',
+  mid: '📝',
+  long: '🔗',
+};
+
+/**
+ * Map pipeline stages to their primary depth layer.
+ * Stages not listed here don't have a specific layer association.
+ */
+export const STAGE_DEPTH_LAYER: Readonly<Record<string, DepthLayer>> = {
+  // Recall pipeline → operates on different layers
+  vector_search: 'flash',       // L0: embedding similarity search
+  'vector-search': 'flash',     // alias
+  graph_traversal: 'short',     // L1: traverse metadata-linked nodes
+  'graph-traversal': 'short',   // alias
+  merge: 'mid',                 // L2: merge results with summaries
+  'result-merge': 'mid',        // alias
+  reinforce: 'short',           // L1: Hebbian weight update on metadata
+  format: 'mid',                // L2: format summaries for context
+  inject: 'long',               // L3: inject with source references
+
+  // Ingestion pipeline
+  ingestion: 'flash',           // L0: initial ingestion (keywords, embedding)
+  node_extraction: 'short',     // L1: extract structured metadata
+  'fact-extraction': 'short',   // alias for legacy
+  'episode-extraction': 'mid',  // L2: episodic summary extraction
+  'concept-extraction': 'long', // L3: concept linking to sources
+
+  // Batch extraction
+  batch_extraction: 'short',    // L1: batch metadata extraction
+
+  // Context injection
+  'context-injection': 'mid',   // L2: context formatting
+};
+
+/** Get the depth layer for a given stage, or undefined if not mapped. */
+export function getStageDepthLayer(stage: string): DepthLayer | undefined {
+  return STAGE_DEPTH_LAYER[stage];
+}
+
 // ─── Stage Status ──────────────────────────────────────────
 
 /**
@@ -89,6 +180,9 @@ export interface StageEntry {
 
   /** Whether this is a top-level stage */
   isTopLevel: boolean;
+
+  /** MemoryNode depth layer this stage primarily operates on */
+  depthLayer?: DepthLayer;
 }
 
 // ─── Stage Metadata ────────────────────────────────────────

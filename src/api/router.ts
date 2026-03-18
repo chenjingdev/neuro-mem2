@@ -19,12 +19,15 @@ import {
   validateIngestConversation,
   validateAppendMessage,
   validateRecallRequest,
+  validateHybridSearchRequest,
   toIngestInput,
   toAppendInput,
   toRecallResponse,
   type IngestConversationRequest,
   type AppendMessageRequest,
   type RecallRequest,
+  type HybridSearchRequest,
+  type HybridSearchResponse,
   type IngestResponse,
   type AppendMessageResponse,
   type RecallResponse,
@@ -38,6 +41,10 @@ import type { RateLimitConfig } from './middleware/types.js';
 import { createChatRouter, type ChatRouterDependencies } from '../chat/chat-router.js';
 import { createSessionsRouter } from '../chat/sessions-router.js';
 import { createHistoryRouter } from '../chat/history-router.js';
+import type { HybridSearcher, HybridSearchConfig } from '../retrieval/hybrid-searcher.js';
+import type { MemoryNodeType, MemoryNodeRole } from '../models/memory-node.js';
+import { createMemoryNodeRouter, type MemoryNodeRouterDeps } from './memory-node-router.js';
+import { createDecaySimulatorRouter, type DecaySimulatorRouterDeps } from './decay-simulator-router.js';
 
 // ─── App Dependencies ────────────────────────────────────
 
@@ -60,6 +67,12 @@ export interface RouterDependencies {
   chatDeps?: ChatRouterDependencies;
   /** Chat debug database handle — when provided, mounts sessions API at /api/sessions */
   chatDb?: Database.Database;
+  /** Hybrid searcher (FTS5 + vector) — when provided, enables POST /search/hybrid */
+  hybridSearcher?: HybridSearcher;
+  /** Memory node router dependencies — when provided, mounts /api/memory-nodes */
+  memoryNodeDeps?: MemoryNodeRouterDeps;
+  /** Decay simulator router dependencies — when provided, mounts /api/decay-sim */
+  decaySimDeps?: DecaySimulatorRouterDeps;
 }
 
 // ─── Router Factory ──────────────────────────────────────
@@ -160,7 +173,6 @@ export function createRouter(deps: RouterDependencies): Hono {
       const message = deps.ingestService.appendMessage(input);
 
       const response: AppendMessageResponse = {
-        messageId: message.id,
         conversationId: message.conversationId,
         turnIndex: message.turnIndex,
         createdAt: message.createdAt,
@@ -202,6 +214,80 @@ export function createRouter(deps: RouterDependencies): Hono {
       app.route('/api', historyRouter);
     }
   }
+
+  // ── Mount Memory Node Router (L0→L1→L2→L3 progressive depth loading) ──
+  if (deps.memoryNodeDeps) {
+    const memoryNodeRouter = createMemoryNodeRouter(deps.memoryNodeDeps);
+    app.route('/api/memory-nodes', memoryNodeRouter);
+  }
+
+  // ── Mount Decay Simulator Router ──
+  if (deps.decaySimDeps) {
+    const decaySimRouter = createDecaySimulatorRouter(deps.decaySimDeps);
+    app.route('/api/decay-sim', decaySimRouter);
+  }
+
+  // ── POST /search/hybrid — FTS5 + vector hybrid search on MemoryNode ──
+  app.post('/search/hybrid', async (c) => {
+    try {
+      const body = await c.req.json();
+
+      // Validate request
+      const errors = validateHybridSearchRequest(body);
+      if (errors.length > 0) {
+        const errorResp: ErrorResponse = {
+          error: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: errors,
+        };
+        return c.json(errorResp, 400);
+      }
+
+      if (!deps.hybridSearcher) {
+        const errorResp: ErrorResponse = {
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'Hybrid search service is not configured. Provide an embedding provider to enable hybrid search.',
+        };
+        return c.json(errorResp, 503);
+      }
+
+      const req = body as HybridSearchRequest;
+
+      // Build config overrides from request
+      const configOverrides: Partial<HybridSearchConfig> = {};
+      if (req.topK !== undefined) configOverrides.topK = req.topK;
+      if (req.minScore !== undefined) configOverrides.minScore = req.minScore;
+      if (req.ftsWeight !== undefined) configOverrides.ftsWeight = req.ftsWeight;
+      if (req.nodeTypeFilter !== undefined) configOverrides.nodeTypeFilter = req.nodeTypeFilter as MemoryNodeType | MemoryNodeType[];
+      if (req.nodeRoleFilter !== undefined) configOverrides.nodeRoleFilter = req.nodeRoleFilter as MemoryNodeRole;
+      if (req.applyDecay !== undefined) configOverrides.applyDecay = req.applyDecay;
+
+      const result = await deps.hybridSearcher.search(
+        req.query,
+        req.currentEventCounter,
+        configOverrides,
+      );
+
+      const response: HybridSearchResponse = {
+        items: result.items.map(item => ({
+          nodeId: item.nodeId,
+          nodeType: item.nodeType,
+          nodeRole: item.nodeRole,
+          frontmatter: item.frontmatter,
+          score: item.score,
+          scoreBreakdown: item.scoreBreakdown,
+          source: item.source,
+        })),
+        totalItems: result.items.length,
+        query: req.query,
+        stats: (req.includeStats ?? false) ? result.stats as unknown as Record<string, unknown> : undefined,
+      };
+
+      return c.json(response, 200);
+    } catch (err) {
+      return handleError(c, err);
+    }
+  });
 
   // ── POST /recall — Retrieve relevant memories ──
   app.post('/recall', async (c) => {
