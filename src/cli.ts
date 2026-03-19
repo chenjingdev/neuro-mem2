@@ -27,6 +27,8 @@ import { MockLLMProvider } from './extraction/llm-provider.js';
 import type { LLMProvider } from './extraction/llm-provider.js';
 import { FactExtractor } from './extraction/fact-extractor.js';
 import { FactRepository } from './db/fact-repo.js';
+import { MemoryNodeRepository } from './db/memory-node-repo.js';
+import { WeightedEdgeRepository } from './db/weighted-edge-repo.js';
 import { DualPathRetriever } from './retrieval/dual-path-retriever.js';
 import { MockEmbeddingProvider } from './retrieval/embedding-provider.js';
 import { TurnExtractionPipeline } from './services/turn-extraction-pipeline.js';
@@ -90,6 +92,10 @@ turnPipeline.start();
 const embeddingProvider = new MockEmbeddingProvider(256);
 const retriever = new DualPathRetriever(db, embeddingProvider);
 
+// ── Memory Node & Edge Repositories (for Memory Explorer UI) ──
+const memoryNodeRepo = new MemoryNodeRepository(db);
+const weightedEdgeRepo = new WeightedEdgeRepository(db);
+
 // ── Start Server ──
 startServer(
   {
@@ -108,6 +114,10 @@ startServer(
       ingestService,
     },
     chatDb,
+    memoryNodeDeps: {
+      nodeRepo: memoryNodeRepo,
+      edgeRepo: weightedEdgeRepo,
+    },
   },
   { port, hostname: '127.0.0.1' },
 );
