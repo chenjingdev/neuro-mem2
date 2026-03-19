@@ -11,3 +11,4 @@ __pycache__/
 *.pyc
 nero.db-shm
 nero.db-wal
+.worktrees/
