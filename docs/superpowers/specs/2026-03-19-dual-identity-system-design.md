@@ -18,7 +18,7 @@
 - **비대칭 모델**: Human Identity는 이해 중심, Agent Identity는 행위 중심. 같은 구조를 강제하지 않는다.
 - **씨앗 + 진화**: Agent Identity는 Human Identity 분석에서 시드되고, 이후 경험으로 진화한다.
 - **점진적 변화**: Identity는 급변하지 않는다. consolidation당 최대 허용 변경률을 적용한다.
-- **근거 추적**: 모든 Identity 속성은 MemoryNode 근거를 참조한다.
+- **근거 추적**: 모든 Identity 속성은 `memory_nodes.id`를 참조한다. (레거시 `facts` 테이블이 아닌 통합 MemoryNode만 사용)
 - **투명성**: 진화 이력이 기록되고 사용자가 확인할 수 있다.
 
 ## 3. Human Identity 모델
@@ -38,10 +38,10 @@ interface HumanIdentity {
   }[]
 
   // 가치관
-  values: {
+  coreValues: {
     value: string              // "코드 품질", "빠른 실행"
     weight: number             // 0-1
-    evidence: string[]
+    sourceNodeIds: string[]    // MemoryNode 근거
   }[]
 
   // 소통 패턴
@@ -54,7 +54,7 @@ interface HumanIdentity {
   expertiseMap: {
     domain: string
     level: 'novice' | 'intermediate' | 'advanced' | 'expert'
-    evidence: string[]
+    sourceNodeIds: string[]    // MemoryNode 근거
   }[]
 
   // 현재 관심사/목표 (시간에 따라 변하는 부분)
@@ -83,6 +83,7 @@ interface HumanIdentity {
 interface AgentIdentity {
   id: string
   name?: string
+  pairedHumanIdentityId?: string  // 연결된 Human Identity (nullable, 향후 multi-user 대비)
 
   // 페르소나 코어 — 시드에서 출발, 경험으로 진화
   persona: {
@@ -92,17 +93,33 @@ interface AgentIdentity {
   }
 
   // 성격 축 — 스펙트럼으로 표현 (-1.0 ~ +1.0)
+  // 기본 축은 PersonalityAxis에 정의, 커스텀 축 확장 가능
   personality: {
-    axis: string               // "directness", "warmth", "humor", "formality"
-    value: number              // -1=완곡/차가운/진지한/캐주얼, +1=직설/따뜻/유머러스/격식
+    axis: PersonalityAxis | string
+    value: number              // -1 ~ +1
     confidence: number
   }[]
+
+  // ...
+}
+
+// 기본 성격 축 (확장 가능)
+type PersonalityAxis =
+  | 'directness'     // -1=완곡, +1=직설
+  | 'warmth'         // -1=차가운, +1=따뜻한
+  | 'humor'          // -1=진지한, +1=유머러스
+  | 'formality'      // -1=캐주얼, +1=격식
+  | 'patience'       // -1=빠른 진행, +1=인내심 있는
+  | 'assertiveness'  // -1=수동적, +1=주장이 강한
+
+// AgentIdentity 계속:
+// {
 
   // 판단 원칙 — "나는 이렇게 판단한다"
   principles: {
     principle: string          // "단순한 해결책을 복잡한 것보다 우선한다"
     weight: number             // 0-1
-    formedFrom: string[]       // 형성 근거 (MemoryNode IDs)
+    sourceNodeIds: string[]    // 형성 근거 (memory_nodes.id)
   }[]
 
   // 행동 성향 — 상황별 행동 패턴
@@ -132,17 +149,23 @@ interface AgentIdentity {
     currentUnderstanding: string  // "나는 ~한 존재다"
   }
 
-  // 진화 이력
-  evolutionHistory: {
-    version: number
-    changes: string[]
-    triggeredBy: string
-    date: string
-  }[]
+  // 진화 이력은 별도 테이블 (identity_evolution_history)에 저장
+  // 무한 성장 방지를 위해 인라인 JSON이 아닌 별도 테이블 사용
 
   version: number
   createdAt: string
   updatedAt: string
+}
+
+// 진화 이력 (Human/Agent 공용, 별도 테이블)
+interface IdentityEvolutionEntry {
+  id: string
+  identityId: string
+  identityType: 'human' | 'agent'
+  version: number
+  changes: string[]
+  triggeredBy: string          // consolidation job ID 또는 'bootstrap'
+  createdAt: string
 }
 ```
 
@@ -285,11 +308,11 @@ interface IdentityEvolutionConfig {
 CREATE TABLE human_identities (
   id TEXT PRIMARY KEY,
   human_id TEXT NOT NULL UNIQUE,
-  traits TEXT NOT NULL DEFAULT '[]',
-  values TEXT NOT NULL DEFAULT '[]',
-  communication_style TEXT NOT NULL DEFAULT '{}',
-  expertise_map TEXT NOT NULL DEFAULT '[]',
-  current_focus TEXT NOT NULL DEFAULT '[]',
+  traits TEXT NOT NULL DEFAULT '[]',              -- JSON: {trait, confidence, sourceNodeIds}[]
+  core_values TEXT NOT NULL DEFAULT '[]',          -- JSON: {value, weight, sourceNodeIds}[]
+  communication_style TEXT NOT NULL DEFAULT '{}',  -- JSON: {preferred[], avoided[]}
+  expertise_map TEXT NOT NULL DEFAULT '[]',         -- JSON: {domain, level, sourceNodeIds}[]
+  current_focus TEXT NOT NULL DEFAULT '[]',         -- JSON: {topic, since, relatedNodeIds}[]
   version INTEGER DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -297,22 +320,60 @@ CREATE TABLE human_identities (
 
 CREATE TABLE agent_identities (
   id TEXT PRIMARY KEY,
+  paired_human_identity_id TEXT REFERENCES human_identities(id),  -- nullable, 향후 multi-user 대비
   name TEXT,
-  persona TEXT NOT NULL DEFAULT '{}',
-  personality TEXT NOT NULL DEFAULT '[]',
-  principles TEXT NOT NULL DEFAULT '[]',
-  behavioral TEXT NOT NULL DEFAULT '[]',
-  voice TEXT NOT NULL DEFAULT '{}',
-  self_narrative TEXT NOT NULL DEFAULT '{}',
-  evolution_history TEXT NOT NULL DEFAULT '[]',
+  persona TEXT NOT NULL DEFAULT '{}',              -- JSON: {archetype, description, seedSource}
+  personality TEXT NOT NULL DEFAULT '[]',           -- JSON: {axis, value, confidence}[]
+  principles TEXT NOT NULL DEFAULT '[]',            -- JSON: {principle, weight, sourceNodeIds}[]
+  behavioral TEXT NOT NULL DEFAULT '[]',            -- JSON: {trigger, tendency, strength}[]
+  voice TEXT NOT NULL DEFAULT '{}',                 -- JSON: {defaultTone, adaptations[]}
+  self_narrative TEXT NOT NULL DEFAULT '{}',        -- JSON: {origin, keyExperiences[], currentUnderstanding}
   evolution_config TEXT NOT NULL DEFAULT '{"mode":"autonomous","maxPersonalityShiftPerCycle":0.1,"minEvidenceForPrinciple":3,"maxTraitChangeRate":0.2}',
   version INTEGER DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- 진화 이력 (Human/Agent 공용, 무한 성장 방지를 위해 별도 테이블)
+CREATE TABLE identity_evolution_history (
+  id TEXT PRIMARY KEY,
+  identity_id TEXT NOT NULL,
+  identity_type TEXT NOT NULL CHECK(identity_type IN ('human', 'agent')),
+  version INTEGER NOT NULL,
+  changes TEXT NOT NULL DEFAULT '[]',              -- JSON: string[]
+  triggered_by TEXT NOT NULL,                       -- consolidation job ID 또는 'bootstrap'
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_evolution_identity ON identity_evolution_history(identity_id, identity_type);
+CREATE INDEX idx_human_identity_human_id ON human_identities(human_id);
 ```
 
-## 8. 이 스펙의 범위
+## 8. 의존성 및 임시 전략
+
+### 8.1 Consolidation Pipeline 의존성
+
+Agent Identity 진화(섹션 5.2)는 Consolidation Pipeline에 의존하나, 이는 아직 미구현이다.
+
+**임시 전략**: Consolidation이 구현되기 전까지는 다음으로 대체한다:
+- **수동 트리거**: API 엔드포인트 `POST /api/identity/evolve`로 수동 실행
+- **턴 카운트 기반**: `SystemStateRepo.totalTurnsProcessed`가 임계값 도달 시 간이 진화 실행
+
+Consolidation Pipeline이 구현되면 Phase 4(Crystallize)에 IdentityEvolver를 연결하고 임시 트리거는 제거한다.
+
+### 8.2 턴 레벨 Human Identity 업데이트 트리거
+
+`TurnExtractionPipeline`이 MemoryNode 추출을 완료하면 `MemoryNodesExtractedEvent`를 발행한다.
+`IdentityExtractor`는 이 이벤트를 구독하여 새 MemoryNode들로부터 Human Identity를 점진적으로 갱신한다.
+
+```
+TurnExtractionPipeline → MemoryNodesExtractedEvent → IdentityExtractor
+  입력: ExtractedMemoryNode[]
+  처리: 기존 Human Identity와 비교 → 변경 필요 시 갱신
+  제약: 매 턴마다 LLM 호출하면 비용 과다 → 중요도 높은 노드만 필터링
+```
+
+## 9. 이 스펙의 범위
 
 ### 포함
 
@@ -330,7 +391,7 @@ CREATE TABLE agent_identities (
 - Multi-user/Organization 모드 — 서브프로젝트 별도
 - Consolidation Pipeline 자체 구현 (SPEC에 정의됨) — 별도 작업
 
-## 9. 서브프로젝트 로드맵
+## 10. 서브프로젝트 로드맵
 
 | 순서 | 서브프로젝트 | 의존성 |
 |------|------------|--------|
