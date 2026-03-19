@@ -45,6 +45,7 @@ import type { HybridSearcher, HybridSearchConfig } from '../retrieval/hybrid-sea
 import type { MemoryNodeType, MemoryNodeRole } from '../models/memory-node.js';
 import { createMemoryNodeRouter, type MemoryNodeRouterDeps } from './memory-node-router.js';
 import { createDecaySimulatorRouter, type DecaySimulatorRouterDeps } from './decay-simulator-router.js';
+import { createIdentityRouter, type IdentityRouterDeps } from './identity-router.js';
 
 // ─── App Dependencies ────────────────────────────────────
 
@@ -73,6 +74,8 @@ export interface RouterDependencies {
   memoryNodeDeps?: MemoryNodeRouterDeps;
   /** Decay simulator router dependencies — when provided, mounts /api/decay-sim */
   decaySimDeps?: DecaySimulatorRouterDeps;
+  /** Identity router dependencies — when provided, mounts /api/identity */
+  identityDeps?: IdentityRouterDeps;
 }
 
 // ─── Router Factory ──────────────────────────────────────
@@ -225,6 +228,12 @@ export function createRouter(deps: RouterDependencies): Hono {
   if (deps.decaySimDeps) {
     const decaySimRouter = createDecaySimulatorRouter(deps.decaySimDeps);
     app.route('/api/decay-sim', decaySimRouter);
+  }
+
+  // ── Mount Identity Router ──
+  if (deps.identityDeps) {
+    const identityRouter = createIdentityRouter(deps.identityDeps);
+    app.route('/api/identity', identityRouter);
   }
 
   // ── POST /search/hybrid — FTS5 + vector hybrid search on MemoryNode ──

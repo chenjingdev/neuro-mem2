@@ -113,3 +113,7 @@ export {
   type HubCandidateExtractionResult,
   type HubCandidateStats,
 } from './hub-candidate-extractor.js';
+
+// Identity extraction
+export { IdentityExtractor } from './identity-extractor.js';
+export { PersonaProposer } from './persona-proposer.js';

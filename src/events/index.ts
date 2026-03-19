@@ -10,5 +10,6 @@ export type {
   BatchJobFailedEvent,
   DecayCompletedEvent,
   DecayErrorEvent,
+  IdentityUpdatedEvent,
   EventHandler,
 } from './event-bus.js';

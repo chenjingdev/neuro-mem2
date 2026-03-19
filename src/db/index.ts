@@ -12,3 +12,6 @@ export { MemoryEmbeddingRepository } from './memory-embedding-repo.js';
 export type { MemoryEmbedding, StoreEmbeddingInput, EmbeddingRow } from './memory-embedding-repo.js';
 export { MemoryNodeRepository } from './memory-node-repo.js';
 export { SCHEMA_VERSION } from './schema.js';
+export { HumanIdentityRepository } from './human-identity-repo.js';
+export { AgentIdentityRepository } from './agent-identity-repo.js';
+export { CREATE_IDENTITY_TABLES } from './identity-schema.js';

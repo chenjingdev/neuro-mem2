@@ -70,3 +70,7 @@ export {
   type HubMatchResult,
   type HubMatchStats,
 } from './hub-matcher.js';
+
+// Identity services
+export { IdentityEvolver } from './identity-evolver.js';
+export { ContextComposer } from './context-composer.js';

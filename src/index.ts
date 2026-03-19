@@ -267,6 +267,40 @@ export type {
   RetrievalSource,
 } from './retrieval/index.js';
 
+// Identity system
+export { createIdentityRouter } from './api/identity-router.js';
+export type { IdentityRouterDeps } from './api/identity-router.js';
+export type {
+  PersonalityAxis,
+  IdentityEvolutionEntry,
+  HumanIdentity,
+  HumanIdentityTrait,
+  HumanIdentityCoreValue,
+  HumanIdentityCommunicationStyle,
+  HumanIdentityExpertise,
+  HumanIdentityFocus,
+  CreateHumanIdentityInput,
+  UpdateHumanIdentityInput,
+  AgentIdentity,
+  AgentPersona,
+  AgentPersonalityEntry,
+  AgentPrinciple,
+  AgentBehavioralTendency,
+  AgentVoice,
+  AgentSelfNarrative,
+  IdentityEvolutionConfig,
+  CreateAgentIdentityInput,
+  UpdateAgentIdentityInput,
+  PersonaCandidate,
+} from './models/identity.js';
+export { DEFAULT_EVOLUTION_CONFIG } from './models/identity.js';
+export { HumanIdentityRepository } from './db/index.js';
+export { AgentIdentityRepository } from './db/index.js';
+export { IdentityExtractor } from './extraction/index.js';
+export { PersonaProposer } from './extraction/index.js';
+export { IdentityEvolver } from './services/index.js';
+export { ContextComposer } from './services/index.js';
+
 // REST API
 export { createRouter, startServer, stopServer, DEFAULT_SERVER_CONFIG } from './api/index.js';
 export type { RouterDependencies, ServerConfig } from './api/index.js';

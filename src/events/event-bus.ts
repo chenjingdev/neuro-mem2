@@ -109,6 +109,16 @@ export interface MemoryNodesExtractedEvent {
   timestamp: string;
 }
 
+/** Emitted when an identity (human or agent) is updated */
+export interface IdentityUpdatedEvent {
+  type: 'identity.updated'
+  identityId: string
+  identityType: 'human' | 'agent'
+  version: number
+  changes: string[]
+  timestamp: string
+}
+
 export type MemoryEvent =
   | TurnCompletedEvent
   | FactsExtractedEvent
@@ -120,7 +130,8 @@ export type MemoryEvent =
   | DecayCompletedEvent
   | DecayErrorEvent
   | RetrievalCompletedEvent
-  | MemoryNodesExtractedEvent;
+  | MemoryNodesExtractedEvent
+  | IdentityUpdatedEvent;
 
 export type EventHandler<T extends MemoryEvent = MemoryEvent> = (event: T) => void | Promise<void>;
 
