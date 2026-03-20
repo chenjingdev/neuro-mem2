@@ -496,9 +496,9 @@ describe('UnifiedRetriever with LLM Reranker', () => {
     const fact = createFact('TypeScript is a statically typed language', conv.id);
 
     edgeRepo.createEdge({
-      sourceId: anchor.id, sourceType: 'anchor',
-      targetId: fact.id, targetType: 'fact',
-      edgeType: 'anchor_to_fact', weight: 0.8,
+      sourceId: anchor.id, sourceType: 'hub',
+      targetId: fact.id, targetType: 'leaf',
+      edgeType: 'about', weight: 0.8,
     });
 
     mockEmbedding.setEmbedding('TypeScript features', queryVec);
@@ -540,14 +540,14 @@ describe('UnifiedRetriever with LLM Reranker', () => {
     const fact2 = createFact('Fact about topic B', conv.id);
 
     edgeRepo.createEdge({
-      sourceId: anchor1.id, sourceType: 'anchor',
-      targetId: fact1.id, targetType: 'fact',
-      edgeType: 'anchor_to_fact', weight: 0.8,
+      sourceId: anchor1.id, sourceType: 'hub',
+      targetId: fact1.id, targetType: 'leaf',
+      edgeType: 'about', weight: 0.8,
     });
     edgeRepo.createEdge({
-      sourceId: anchor2.id, sourceType: 'anchor',
-      targetId: fact2.id, targetType: 'fact',
-      edgeType: 'anchor_to_fact', weight: 0.8,
+      sourceId: anchor2.id, sourceType: 'hub',
+      targetId: fact2.id, targetType: 'leaf',
+      edgeType: 'about', weight: 0.8,
     });
 
     mockEmbedding.setEmbedding('test query', queryVec);
@@ -603,9 +603,9 @@ describe('UnifiedRetriever with LLM Reranker', () => {
     const fact = createFact('Test fact for tracing', conv.id);
 
     edgeRepo.createEdge({
-      sourceId: anchor.id, sourceType: 'anchor',
-      targetId: fact.id, targetType: 'fact',
-      edgeType: 'anchor_to_fact', weight: 0.8,
+      sourceId: anchor.id, sourceType: 'hub',
+      targetId: fact.id, targetType: 'leaf',
+      edgeType: 'about', weight: 0.8,
     });
 
     mockEmbedding.setEmbedding('test', queryVec);
@@ -643,9 +643,9 @@ describe('UnifiedRetriever with LLM Reranker', () => {
     const fact = createFact('Test fact for failure', conv.id);
 
     edgeRepo.createEdge({
-      sourceId: anchor.id, sourceType: 'anchor',
-      targetId: fact.id, targetType: 'fact',
-      edgeType: 'anchor_to_fact', weight: 0.8,
+      sourceId: anchor.id, sourceType: 'hub',
+      targetId: fact.id, targetType: 'leaf',
+      edgeType: 'about', weight: 0.8,
     });
 
     mockEmbedding.setEmbedding('test', queryVec);

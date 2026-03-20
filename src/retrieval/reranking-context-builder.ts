@@ -124,7 +124,7 @@ export class RerankingContextBuilder {
   /**
    * Build re-ranking context from top-K anchor matches.
    *
-   * For each anchor, traverses anchor_to_fact weighted edges to collect
+   * For each anchor, traverses hub→leaf weighted edges to collect
    * connected facts with their multi-level representations. Facts are
    * deduplicated (same fact reachable from multiple anchors — keeps the
    * best edge weight and merges source anchors), then globally ranked by
@@ -146,15 +146,15 @@ export class RerankingContextBuilder {
     const globalFactMap = new Map<string, LinkedFact>();
 
     for (const anchor of matchedAnchors) {
-      // Query weighted_edges for anchor_to_fact connections
+      // Query weighted_edges for hub→leaf connections
       const edges = this.db.prepare(`
         SELECT we.target_id, we.weight, we.activation_count,
                f.content, f.summary, f.frontmatter, f.category, f.confidence
         FROM weighted_edges we
         JOIN facts f ON f.id = we.target_id
         WHERE we.source_id = ?
-          AND we.source_type = 'anchor'
-          AND we.target_type = 'fact'
+          AND we.source_type = 'hub'
+          AND we.target_type = 'leaf'
           AND we.weight >= ?
           AND f.superseded = 0
         ORDER BY we.weight DESC

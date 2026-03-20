@@ -88,12 +88,13 @@ function seedData(db: Database.Database) {
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO raw_conversations (id, title, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
     .run(convId, 'Hebbian Test Conv', 'test', now, now);
-  const msgId1 = uuidv4();
-  const msgId2 = uuidv4();
-  db.prepare(`INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(msgId1, convId, 'user', 'Tell me about TypeScript', 0, now);
-  db.prepare(`INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(msgId2, convId, 'assistant', 'TypeScript is great for large projects', 1, now);
+  // raw_messages uses composite PK: conversation_id + turn_index (no id column)
+  const msgId1 = `${convId}:0`;
+  const msgId2 = `${convId}:1`;
+  db.prepare(`INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(convId, 0, 'user', 'Tell me about TypeScript', now);
+  db.prepare(`INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(convId, 1, 'assistant', 'TypeScript is great for large projects', now);
 
   // Facts
   const fact1 = factRepo.create({
@@ -190,35 +191,35 @@ function seedData(db: Database.Database) {
 
   // Weighted edges: anchor → memory nodes (initial weight 0.5 for testability)
   const we1 = weightedEdgeRepo.createEdge({
-    sourceId: anchor1.id, sourceType: 'anchor',
-    targetId: fact1.id, targetType: 'fact',
-    edgeType: 'anchor_to_fact', weight: 0.5,
+    sourceId: anchor1.id, sourceType: 'hub',
+    targetId: fact1.id, targetType: 'leaf',
+    edgeType: 'about', weight: 0.5,
     learningRate: 0.1,
   });
   const we2 = weightedEdgeRepo.createEdge({
-    sourceId: anchor1.id, sourceType: 'anchor',
-    targetId: fact2.id, targetType: 'fact',
-    edgeType: 'anchor_to_fact', weight: 0.5,
+    sourceId: anchor1.id, sourceType: 'hub',
+    targetId: fact2.id, targetType: 'leaf',
+    edgeType: 'about', weight: 0.5,
     learningRate: 0.1,
   });
   const we3 = weightedEdgeRepo.createEdge({
-    sourceId: anchor1.id, sourceType: 'anchor',
-    targetId: concept1.id, targetType: 'concept',
-    edgeType: 'anchor_to_concept', weight: 0.5,
+    sourceId: anchor1.id, sourceType: 'hub',
+    targetId: concept1.id, targetType: 'leaf',
+    edgeType: 'about', weight: 0.5,
     learningRate: 0.1,
   });
   const we4 = weightedEdgeRepo.createEdge({
-    sourceId: anchor1.id, sourceType: 'anchor',
-    targetId: episode1.id, targetType: 'episode',
-    edgeType: 'anchor_to_episode', weight: 0.5,
+    sourceId: anchor1.id, sourceType: 'hub',
+    targetId: episode1.id, targetType: 'leaf',
+    edgeType: 'about', weight: 0.5,
     learningRate: 0.1,
   });
 
   // Anchor2 → fact3 (SQLite edge)
   const we5 = weightedEdgeRepo.createEdge({
-    sourceId: anchor2.id, sourceType: 'anchor',
-    targetId: fact3.id, targetType: 'fact',
-    edgeType: 'anchor_to_fact', weight: 0.5,
+    sourceId: anchor2.id, sourceType: 'hub',
+    targetId: fact3.id, targetType: 'leaf',
+    edgeType: 'about', weight: 0.5,
     learningRate: 0.1,
   });
 
@@ -453,9 +454,13 @@ describe('Retrieval Pipeline — Co-activation & Hebbian Integration', () => {
       const targetEdge = data.weightedEdges[0]; // anchor1 → fact1
       const initialWeight = targetEdge.weight; // 0.5
 
-      // Manually compute expected weight after Hebbian update
-      // w_new = 0.5 + 0.05 * (1 - 0.5) = 0.5 + 0.025 = 0.525
-      const expectedAfterOne = initialWeight + lr * (1 - initialWeight);
+      // Manually compute expected weight after Hebbian update (WEIGHT_CAP=100)
+      // headroom = (100 - 0.5) / 100 = 0.995
+      // delta = 0.05 * 100 * 0.995 = 4.975
+      // w_new = 0.5 + 4.975 = 5.475
+      const WEIGHT_CAP = 100;
+      const headroom = (WEIGHT_CAP - initialWeight) / WEIGHT_CAP;
+      const expectedAfterOne = initialWeight + lr * WEIGHT_CAP * headroom;
 
       const result = await retriever.recall({ queryText: 'TypeScript' });
 
@@ -495,10 +500,10 @@ describe('Retrieval Pipeline — Co-activation & Hebbian Integration', () => {
       const reinforcedEdges = edges.filter(e => e.activationCount > 0);
 
       for (const edge of reinforcedEdges) {
-        // After 30 iterations with lr=0.1 from 0.5:
-        // Converges to very close to 1.0
-        expect(edge.weight).toBeGreaterThan(0.95);
-        expect(edge.weight).toBeLessThanOrEqual(1.0);
+        // After 30 iterations with lr=0.1 from 0.5 (WEIGHT_CAP=100):
+        // Converges toward WEIGHT_CAP (100)
+        expect(edge.weight).toBeGreaterThan(90);
+        expect(edge.weight).toBeLessThanOrEqual(100);
       }
     });
 
@@ -726,9 +731,9 @@ describe('Retrieval Pipeline — Co-activation & Hebbian Integration', () => {
       const reinforcedEdges = edges.filter(e => e.activationCount > 0);
 
       for (const edge of reinforcedEdges) {
-        // After 50 iterations at lr=0.05 from 0.5, weight should be well above 0.9
-        // (exact value depends on whether edge is reinforced every iteration)
-        expect(edge.weight).toBeGreaterThan(0.90);
+        // After 50 iterations at lr=0.05 from 0.5 with WEIGHT_CAP=100,
+        // weight should be well above 90 (converging toward 100)
+        expect(edge.weight).toBeGreaterThan(90);
       }
 
       // Run 5 more — the delta should be negligible
@@ -745,8 +750,8 @@ describe('Retrieval Pipeline — Co-activation & Hebbian Integration', () => {
       for (const edge of edgesAfter) {
         const before = weightsBefore.get(edge.id);
         if (before !== undefined && edge.activationCount > 0) {
-          // Delta should be very small (diminishing returns near convergence)
-          expect(Math.abs(edge.weight - before)).toBeLessThan(0.05);
+          // Delta should be small relative to WEIGHT_CAP (diminishing returns near convergence)
+          expect(Math.abs(edge.weight - before)).toBeLessThan(5);
         }
       }
     });

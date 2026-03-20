@@ -323,7 +323,7 @@ describe('AnchorLinker', () => {
     const edges = edgeRepo.getOutgoingEdges(anchor.id);
     expect(edges).toHaveLength(1);
     expect(edges[0].targetId).toBe(fact.id);
-    expect(edges[0].edgeType).toBe('anchor_to_fact');
+    expect(edges[0].edgeType).toBe('about');
     expect(edges[0].weight).toBe(0.85);
 
     // Verify anchor activation was recorded
@@ -368,7 +368,7 @@ describe('AnchorLinker', () => {
     const edges = edgeRepo.getOutgoingEdges(anchor!.id);
     expect(edges).toHaveLength(1);
     expect(edges[0].targetId).toBe(fact.id);
-    expect(edges[0].edgeType).toBe('anchor_to_fact');
+    expect(edges[0].edgeType).toBe('about');
 
     // Verify embedding was created for new anchor
     expect(anchor!.embedding).toBeDefined();

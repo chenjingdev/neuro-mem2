@@ -107,7 +107,7 @@ describe('Turn Extraction Pipeline', () => {
         content: 'Hi!',
       });
 
-      expect(msg.id).toBeDefined();
+      expect(msg.turnIndex).toBeDefined();
     });
   });
 
@@ -520,9 +520,9 @@ describe('Turn Extraction Pipeline', () => {
 
       const facts = factRepo.getActiveByConversation(conv.id);
       expect(facts.length).toBe(1);
-      // Should reference both user and assistant message IDs
-      expect(facts[0]!.sourceMessageIds).toContain(conv.messages[0]!.id);
-      expect(facts[0]!.sourceMessageIds).toContain(assistantMsg.id);
+      // Should reference both user and assistant message IDs (format: 'convId:turnIndex')
+      expect(facts[0]!.sourceMessageIds).toContain(`${conv.id}:${conv.messages[0]!.turnIndex}`);
+      expect(facts[0]!.sourceMessageIds).toContain(`${conv.id}:${assistantMsg.turnIndex}`);
     });
 
     it('should store SPO (subject/predicate/object) triples end-to-end', async () => {

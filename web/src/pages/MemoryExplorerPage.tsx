@@ -151,20 +151,21 @@ export function MemoryExplorerPage({ onNavigateToChat }: MemoryExplorerPageProps
             </button>
           )}
           <h1 className="app-title">🧠 Memory Explorer</h1>
+          <span className="header-help">?<span className="help-tooltip">저장된 메모리 노드(semantic/episodic)를 타입·역할별로 필터링하고, FTS5 키워드 검색 및 상세 메타데이터를 조회합니다.</span></span>
         </div>
         <div className="header-right">
           <div className="mep-view-toggle">
             <button
               className={`mep-view-btn ${viewMode === 'accordion' ? 'mep-view-btn-active' : ''}`}
               onClick={() => setViewMode('accordion')}
-              title="Accordion view (expandable layers)"
+              title="레이어별 아코디언 뷰 — L0~L3 단계별 펼쳐보기"
             >
               ☰ Layers
             </button>
             <button
               className={`mep-view-btn ${viewMode === 'table' ? 'mep-view-btn-active' : ''}`}
               onClick={() => setViewMode('table')}
-              title="Table view (sortable columns)"
+              title="테이블 뷰 — 컬럼별 정렬 가능한 목록"
             >
               ▤ Table
             </button>

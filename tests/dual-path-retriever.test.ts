@@ -84,13 +84,13 @@ function seedTestData(db: Database.Database) {
   db.prepare(`INSERT INTO raw_conversations (id, title, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`)
     .run(convId, 'Test Conversation', 'test', new Date().toISOString(), new Date().toISOString());
 
-  // Create messages
-  const msgId1 = uuidv4();
-  const msgId2 = uuidv4();
-  db.prepare(`INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(msgId1, convId, 'user', 'How do I set up TypeScript with SQLite?', 0, new Date().toISOString());
-  db.prepare(`INSERT INTO raw_messages (id, conversation_id, role, content, turn_index, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(msgId2, convId, 'assistant', 'Use better-sqlite3 with TypeScript for local storage.', 1, new Date().toISOString());
+  // Create messages (raw_messages uses composite PK: conversation_id + turn_index)
+  const msgId1 = `${convId}:0`;
+  const msgId2 = `${convId}:1`;
+  db.prepare(`INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(convId, 0, 'user', 'How do I set up TypeScript with SQLite?', new Date().toISOString());
+  db.prepare(`INSERT INTO raw_messages (conversation_id, turn_index, role, content, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(convId, 1, 'assistant', 'Use better-sqlite3 with TypeScript for local storage.', new Date().toISOString());
 
   // Create facts (for graph path retrieval via entity matching)
   const fact1 = factRepo.create({
@@ -222,55 +222,55 @@ function seedTestData(db: Database.Database) {
   // Create weighted edges from anchors to memory nodes
   weightedEdgeRepo.createEdge({
     sourceId: anchor1.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: fact1.id,
-    targetType: 'fact',
-    edgeType: 'anchor_to_fact',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.8,
   });
 
   weightedEdgeRepo.createEdge({
     sourceId: anchor1.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: concept1.id,
-    targetType: 'concept',
-    edgeType: 'anchor_to_concept',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.9,
   });
 
   weightedEdgeRepo.createEdge({
     sourceId: anchor2.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: fact2.id,
-    targetType: 'fact',
-    edgeType: 'anchor_to_fact',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.7,
   });
 
   weightedEdgeRepo.createEdge({
     sourceId: anchor2.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: fact3.id,
-    targetType: 'fact',
-    edgeType: 'anchor_to_fact',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.6,
   });
 
   weightedEdgeRepo.createEdge({
     sourceId: anchor2.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: concept2.id,
-    targetType: 'concept',
-    edgeType: 'anchor_to_concept',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.85,
   });
 
   weightedEdgeRepo.createEdge({
     sourceId: anchor2.id,
-    sourceType: 'anchor',
+    sourceType: 'hub',
     targetId: episode1.id,
-    targetType: 'episode',
-    edgeType: 'anchor_to_episode',
+    targetType: 'leaf',
+    edgeType: 'about',
     weight: 0.65,
   });
 

@@ -355,10 +355,10 @@ describe('VectorSearcher', () => {
       // Connect anchor → fact via weighted edge
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.8,
       });
 
@@ -399,10 +399,10 @@ describe('VectorSearcher', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.5,
       });
 
@@ -436,19 +436,19 @@ describe('VectorSearcher', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: strongFact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.7,
       });
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: weakFact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.05, // Below threshold
       });
 
@@ -476,10 +476,10 @@ describe('VectorSearcher', () => {
         const fact = createFact(`Fact ${i}`, conv.id);
         edgeRepo.createEdge({
           sourceId: anchor.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: 0.9 - i * 0.05,
         });
       }
@@ -505,10 +505,10 @@ describe('VectorSearcher', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.5,
       });
 
@@ -543,19 +543,19 @@ describe('VectorSearcher', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor1.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.9,
       });
 
       edgeRepo.createEdge({
         sourceId: anchor2.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.6,
       });
 
@@ -620,10 +620,10 @@ describe('VectorSearcher', () => {
         const fact = createFact(`Fact ${i}`, conv.id);
         edgeRepo.createEdge({
           sourceId: anchor.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: 0.9 - i * 0.05,
         });
       }

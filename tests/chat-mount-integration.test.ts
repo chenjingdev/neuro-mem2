@@ -131,7 +131,7 @@ describe('Chat Router mounted on main app', () => {
   describe('POST /chat — SSE streaming', () => {
     it('returns SSE response with correct Content-Type header', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'hello' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'hello' });
 
       expect(res.status).toBe(200);
       expect(res.headers.get('Content-Type')).toBe('text/event-stream');
@@ -139,7 +139,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('returns all required SSE headers', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'test' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'test' });
 
       expect(res.headers.get('Content-Type')).toBe('text/event-stream');
       expect(res.headers.get('Cache-Control')).toBe('no-cache, no-transform');
@@ -149,7 +149,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('streams trace, chat, and done events in correct order', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'hello world' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'hello world' });
 
       const text = await res.text();
       const events = parseSSEStream(text);
@@ -174,7 +174,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('includes recall trace stage', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'hi' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'hi' });
       const text = await res.text();
       const events = parseSSEStream(text);
 
@@ -186,7 +186,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('includes LLM streaming tokens via chat events', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'greet me' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'greet me' });
       const text = await res.text();
       const events = parseSSEStream(text);
 
@@ -204,7 +204,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('includes done event with full response and timing', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'hi' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'hi' });
       const text = await res.text();
       const events = parseSSEStream(text);
 
@@ -220,7 +220,7 @@ describe('Chat Router mounted on main app', () => {
 
     it('includes pipeline complete trace with stage summary', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: 'test' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'test' });
       const text = await res.text();
       const events = parseSSEStream(text);
 
@@ -242,7 +242,7 @@ describe('Chat Router mounted on main app', () => {
   describe('POST /chat — validation errors', () => {
     it('returns 400 for empty message', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', { message: '' });
+      const res = await request(app, 'POST', '/api/chat', { message: '' });
 
       expect(res.status).toBe(400);
       const body = await res.json();
@@ -251,14 +251,14 @@ describe('Chat Router mounted on main app', () => {
 
     it('returns 400 for missing message', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await request(app, 'POST', '/chat', {});
+      const res = await request(app, 'POST', '/api/chat', {});
 
       expect(res.status).toBe(400);
     });
 
     it('returns 400 for invalid JSON', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await app.request('/chat', {
+      const res = await app.request('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: 'not-json{{{',
@@ -273,7 +273,7 @@ describe('Chat Router mounted on main app', () => {
   describe('GET /chat/health', () => {
     it('returns chat subsystem health status', async () => {
       app = createRouter(makeRouterDeps({ chatDeps: makeChatDeps() }));
-      const res = await app.request('/chat/health', { method: 'GET' });
+      const res = await app.request('/api/chat/health', { method: 'GET' });
 
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -314,14 +314,14 @@ describe('Chat Router mounted on main app', () => {
   describe('Chat router NOT mounted when chatDeps absent', () => {
     it('POST /chat returns 404 when chatDeps is not provided', async () => {
       app = createRouter(makeRouterDeps());
-      const res = await request(app, 'POST', '/chat', { message: 'hello' });
+      const res = await request(app, 'POST', '/api/chat', { message: 'hello' });
 
       expect(res.status).toBe(404);
     });
 
     it('GET /chat/health returns 404 when chatDeps is not provided', async () => {
       app = createRouter(makeRouterDeps());
-      const res = await app.request('/chat/health', { method: 'GET' });
+      const res = await app.request('/api/chat/health', { method: 'GET' });
 
       expect(res.status).toBe(404);
     });

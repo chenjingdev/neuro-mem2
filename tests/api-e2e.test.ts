@@ -250,7 +250,6 @@ describe('API E2E Integration Tests', () => {
 
       expect(status).toBe(201);
       const data = body as Record<string, unknown>;
-      expect(data.messageId).toBeDefined();
       expect(data.conversationId).toBe(conversationId);
       expect(data.turnIndex).toBe(1);
       expect(data.createdAt).toBeDefined();

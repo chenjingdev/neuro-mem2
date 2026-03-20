@@ -82,19 +82,20 @@ if (auth) {
 const factExtractor = new FactExtractor(llmProvider);
 const factRepo = new FactRepository(db);
 
+// ── Memory Node & Edge Repositories (for Memory Explorer UI) ──
+const memoryNodeRepo = new MemoryNodeRepository(db);
+const weightedEdgeRepo = new WeightedEdgeRepository(db);
+
 // ── Turn Extraction Pipeline (auto-saves facts on turn.completed events) ──
 const turnPipeline = new TurnExtractionPipeline(
   eventBus, factExtractor, factRepo, conversationRepo,
+  { memoryNodeRepo },
 );
 turnPipeline.start();
 
 // ── Retriever (hash-based embedding — no external embedding API) ──
 const embeddingProvider = new MockEmbeddingProvider(256);
 const retriever = new DualPathRetriever(db, embeddingProvider);
-
-// ── Memory Node & Edge Repositories (for Memory Explorer UI) ──
-const memoryNodeRepo = new MemoryNodeRepository(db);
-const weightedEdgeRepo = new WeightedEdgeRepository(db);
 
 // ── Start Server ──
 startServer(

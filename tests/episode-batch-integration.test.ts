@@ -251,10 +251,10 @@ describe('Episode Batch Integration', () => {
       const stored = episodeRepo.getEpisodesByConversation(conv.id);
       expect(stored).toHaveLength(1);
 
-      // sourceMessageIds should match the actual DB message IDs
+      // sourceMessageIds should match turn-based refs (conversationId:turnIndex)
       const dbMessages = conversationRepo.getMessages(conv.id);
       expect(stored[0].sourceMessageIds).toEqual(
-        dbMessages.map((m) => m.id),
+        dbMessages.map((m) => `${m.conversationId}:${m.turnIndex}`),
       );
     });
 

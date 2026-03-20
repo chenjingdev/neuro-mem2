@@ -99,10 +99,9 @@ describe('ContextFormatter', () => {
     expect(result.truncated).toBe(false);
     expect(result.text).toContain('<memory_context>');
     expect(result.text).toContain('</memory_context>');
-    expect(result.text).toContain('<facts>');
-    expect(result.text).toContain('<fact>User prefers TypeScript</fact>');
-    expect(result.text).toContain('<episodes>');
-    expect(result.text).toContain('<episode>Debugging session on auth module</episode>');
+    expect(result.text).toContain('<other>');
+    expect(result.text).toContain('User prefers TypeScript');
+    expect(result.text).toContain('Debugging session on auth module');
   });
 
   it('formats items in markdown format', () => {
@@ -115,9 +114,8 @@ describe('ContextFormatter', () => {
 
     expect(result.format).toBe('markdown');
     expect(result.text).toContain('## Memory Context');
-    expect(result.text).toContain('### Facts');
+    expect(result.text).toContain('### Other');
     expect(result.text).toContain('- User prefers TypeScript');
-    expect(result.text).toContain('### Concepts');
     expect(result.text).toContain('- Dependency injection pattern');
   });
 
@@ -128,8 +126,8 @@ describe('ContextFormatter', () => {
 
     expect(result.format).toBe('json');
     const parsed = JSON.parse(result.text);
-    expect(parsed.memoryContext.facts).toHaveLength(1);
-    expect(parsed.memoryContext.facts[0].content).toBe('User prefers TypeScript');
+    expect(parsed.memoryContext.other).toHaveLength(1);
+    expect(parsed.memoryContext.other[0].content).toBe('User prefers TypeScript');
   });
 
   it('includes scores when configured', () => {
@@ -230,16 +228,15 @@ describe('ContextFormatter', () => {
 
     const result = formatter.formatItems(items);
 
-    // Facts should be grouped together
-    const factSection = result.text.indexOf('<facts>');
-    const factEnd = result.text.indexOf('</facts>');
-    const factsContent = result.text.slice(factSection, factEnd);
-    expect(factsContent).toContain('Fact A');
-    expect(factsContent).toContain('Fact D');
-
-    // Episodes separate
-    expect(result.text).toContain('<episodes>');
-    expect(result.text).toContain('<concepts>');
+    // All items end up in 'other' group since 'fact'/'episode'/'concept'
+    // are app-level nodeTypes that don't match the DB-level groupings
+    const otherSection = result.text.indexOf('<other>');
+    const otherEnd = result.text.indexOf('</other>');
+    const otherContent = result.text.slice(otherSection, otherEnd);
+    expect(otherContent).toContain('Fact A');
+    expect(otherContent).toContain('Fact D');
+    expect(otherContent).toContain('Episode B');
+    expect(otherContent).toContain('Concept C');
   });
 
   it('uses custom preamble when provided', () => {

@@ -19,7 +19,6 @@ function makeConversation(
     createdAt: now,
     updatedAt: now,
     messages: messages.map((m, i) => ({
-      id: `msg-${i}`,
       conversationId: id,
       role: m.role,
       content: m.content,
@@ -314,8 +313,8 @@ describe('Episode Extraction', () => {
   describe('buildEpisodeExtractionRequest', () => {
     it('should build a request with conversation messages', () => {
       const messages: RawMessage[] = [
-        { id: 'msg-0', conversationId: 'c1', role: 'user', content: 'Help me write a function', turnIndex: 0, createdAt: '' },
-        { id: 'msg-1', conversationId: 'c1', role: 'assistant', content: 'Sure, here it is', turnIndex: 1, createdAt: '' },
+        { conversationId: 'c1', role: 'user', content: 'Help me write a function', turnIndex: 0, createdAt: '' },
+        { conversationId: 'c1', role: 'assistant', content: 'Sure, here it is', turnIndex: 1, createdAt: '' },
       ];
 
       const request = buildEpisodeExtractionRequest(messages);
@@ -328,7 +327,7 @@ describe('Episode Extraction', () => {
 
     it('should include maxEpisodes in prompt when specified', () => {
       const messages: RawMessage[] = [
-        { id: 'msg-0', conversationId: 'c1', role: 'user', content: 'Hello', turnIndex: 0, createdAt: '' },
+        { conversationId: 'c1', role: 'user', content: 'Hello', turnIndex: 0, createdAt: '' },
       ];
 
       const request = buildEpisodeExtractionRequest(messages, 5);
@@ -386,7 +385,7 @@ describe('Episode Extraction', () => {
       expect(ep1.createdAt).toBeDefined();
 
       // Check source traceability and metadata
-      expect(ep1.sourceMessageIds).toEqual(['msg-0', 'msg-1']);
+      expect(ep1.sourceMessageIds).toEqual(['conv-1:0', 'conv-1:1']);
       expect(ep1.outcome).toBe('TypeScript project configured');
       expect(ep1.metadata?.extractionModel).toBe('mock');
 
@@ -395,7 +394,7 @@ describe('Episode Extraction', () => {
       expect(ep2.title).toBe('Configure vitest');
       expect(ep2.startTurnIndex).toBe(2);
       expect(ep2.endTurnIndex).toBe(3);
-      expect(ep2.sourceMessageIds).toEqual(['msg-2', 'msg-3']);
+      expect(ep2.sourceMessageIds).toEqual(['conv-1:2', 'conv-1:3']);
     });
 
     it('should return empty episodes for empty conversation', async () => {
@@ -516,7 +515,7 @@ describe('Episode Extraction', () => {
 
       const result = await extractor.extract(conversation);
       const ep = result.episodes[0];
-      expect(ep.sourceMessageIds).toEqual(['msg-0', 'msg-1', 'msg-2', 'msg-3']);
+      expect(ep.sourceMessageIds).toEqual(['conv-1:0', 'conv-1:1', 'conv-1:2', 'conv-1:3']);
     });
 
     it('should send the correct prompt to the LLM', async () => {

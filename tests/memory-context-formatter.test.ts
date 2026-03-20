@@ -84,7 +84,7 @@ describe('MemoryContextFormatter', () => {
       expect(result.text).toContain('<preamble>');
       expect(result.text).toContain('<activated_anchors>');
       expect(result.text).toContain('label="TypeScript"');
-      expect(result.text).toContain('<facts>');
+      expect(result.text).toContain('<other>');
       expect(result.text).toContain('TypeScript over JavaScript');
       expect(result.itemCount).toBe(1);
       expect(result.anchorCount).toBe(1);
@@ -186,7 +186,7 @@ describe('MemoryContextFormatter', () => {
       const result = formatter.format(makeRecallResult());
 
       expect(result.text).toContain('## Memory Context');
-      expect(result.text).toContain('### Facts');
+      expect(result.text).toContain('### Other');
       expect(result.text).toContain('- User prefers TypeScript over JavaScript');
       expect(result.format).toBe('markdown');
     });
@@ -246,7 +246,7 @@ describe('MemoryContextFormatter', () => {
       const formatter = new MemoryContextFormatter({ format: 'plain' });
       const result = formatter.format(makeRecallResult());
 
-      expect(result.text).toContain('[1] (Fact) User prefers TypeScript');
+      expect(result.text).toContain('[1] (Fact/L2) User prefers TypeScript over JavaScript');
       expect(result.format).toBe('plain');
     });
 
@@ -489,9 +489,12 @@ describe('MemoryContextFormatter', () => {
       const formatter = new MemoryContextFormatter({ format: 'xml' });
       const result = formatter.format(makeRecallResult(items));
 
-      expect(result.text).toContain('<facts>');
-      expect(result.text).toContain('<episodes>');
-      expect(result.text).toContain('<concepts>');
+      // All three app-level nodeTypes (fact/episode/concept) end up in 'other'
+      // since the formatter groups by DB-level types (semantic/episodic/procedural/etc.)
+      expect(result.text).toContain('<other>');
+      expect(result.text).toContain('Fact item');
+      expect(result.text).toContain('Episode item');
+      expect(result.text).toContain('Concept item');
       expect(result.itemCount).toBe(3);
     });
   });

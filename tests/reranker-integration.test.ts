@@ -112,14 +112,14 @@ describe('Re-ranking Integration', () => {
       const weakFact = createFact('TypeScript has modules', conv.id);
 
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: strongFact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: strongFact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: weakFact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.3,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: weakFact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
 
       embeddingProvider.setEmbedding('TypeScript types', unitVector(DIM, 0));
@@ -163,9 +163,9 @@ describe('Re-ranking Integration', () => {
       });
 
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -197,9 +197,9 @@ describe('Re-ranking Integration', () => {
       const anchor = createAnchorWithEmbedding('Topic', 'Topic desc', unitVector(DIM, 0));
       const fact = createFact('A relevant fact', conv.id);
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -283,9 +283,9 @@ describe('Re-ranking Integration', () => {
       const anchor = createAnchorWithEmbedding('Topic', 'Desc', unitVector(DIM, 0));
       const fact = createFact('A fact', conv.id);
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -315,9 +315,9 @@ describe('Re-ranking Integration', () => {
       const anchor = createAnchorWithEmbedding('Topic', 'Desc', unitVector(DIM, 0));
       const fact = createFact('A fact', conv.id);
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -396,21 +396,21 @@ describe('Re-ranking Integration', () => {
 
       // fact1: strong connection to both anchors
       edgeRepo.createEdge({
-        sourceId: tsAnchor.id, sourceType: 'anchor',
-        targetId: fact1.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: tsAnchor.id, sourceType: 'hub',
+        targetId: fact1.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
       edgeRepo.createEdge({
-        sourceId: webAnchor.id, sourceType: 'anchor',
-        targetId: fact1.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: webAnchor.id, sourceType: 'hub',
+        targetId: fact1.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       // fact2: only TS anchor
       edgeRepo.createEdge({
-        sourceId: tsAnchor.id, sourceType: 'anchor',
-        targetId: fact2.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: tsAnchor.id, sourceType: 'hub',
+        targetId: fact2.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
 
       // Query activates TS anchor
@@ -451,14 +451,14 @@ describe('Re-ranking Integration', () => {
       });
 
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: factRelevant.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.7,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: factRelevant.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.7,
       });
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: factIrrelevant.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.7,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: factIrrelevant.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.7,
       });
 
       embeddingProvider.setEmbedding('TypeScript generics', unitVector(DIM, 0));
@@ -583,9 +583,9 @@ describe('Re-ranking Integration', () => {
       const anchor = createAnchorWithEmbedding('A', 'Anchor A', unitVector(DIM, 0));
       const fact = createFact('Graph-connected fact', conv.id);
       edgeRepo.createEdge({
-        sourceId: anchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: anchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
 
       const reranker = new ReRanker(db, {
@@ -660,9 +660,9 @@ describe('Re-ranking Integration', () => {
       const fact = createFact('TypeScript uses structural typing', conv.id);
 
       edgeRepo.createEdge({
-        sourceId: tsAnchor.id, sourceType: 'anchor',
-        targetId: fact.id, targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: tsAnchor.id, sourceType: 'hub',
+        targetId: fact.id, targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
 
       embeddingProvider.setEmbedding('How does TypeScript work?', tsVec);

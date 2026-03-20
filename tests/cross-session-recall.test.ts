@@ -118,10 +118,10 @@ describe('Cross-session fact recall (integration)', () => {
 
     edgeRepo.createEdge({
       sourceId: anchor.id,
-      sourceType: 'anchor',
+      sourceType: 'hub',
       targetId: fact.id,
-      targetType: 'fact',
-      edgeType: 'anchor_to_fact',
+      targetType: 'leaf',
+      edgeType: 'about',
       weight: opts.edgeWeight ?? 0.8,
     });
 
@@ -380,7 +380,7 @@ describe('Cross-session fact recall (integration)', () => {
     // Verify edge weight increased: 0.5 → 0.55 → 0.595
     const edge = db.prepare(
       `SELECT weight, activation_count FROM weighted_edges
-       WHERE source_type = 'anchor' AND target_type = 'fact'`,
+       WHERE source_type = 'hub' AND target_type = 'leaf'`,
     ).get() as { weight: number; activation_count: number };
 
     expect(edge.weight).toBeGreaterThan(0.5);
@@ -470,10 +470,10 @@ describe('Cross-session fact recall (integration)', () => {
 
     edgeRepo.createEdge({
       sourceId: testAnchor.id,
-      sourceType: 'anchor',
+      sourceType: 'hub',
       targetId: fact2.id,
-      targetType: 'fact',
-      edgeType: 'anchor_to_fact',
+      targetType: 'leaf',
+      edgeType: 'about',
       weight: 0.8,
     });
 
@@ -481,20 +481,20 @@ describe('Cross-session fact recall (integration)', () => {
     // (This creates an association path: query → TS anchor → fact1, and TS anchor → fact1 ← Testing anchor → fact2)
     edgeRepo.createEdge({
       sourceId: testAnchor.id,
-      sourceType: 'anchor',
+      sourceType: 'hub',
       targetId: fact1.id,
-      targetType: 'fact',
-      edgeType: 'anchor_to_fact',
+      targetType: 'leaf',
+      edgeType: 'about',
       weight: 0.6,
     });
 
     // Also link TS anchor to fact2 for BFS discovery
     edgeRepo.createEdge({
       sourceId: tsAnchor.id,
-      sourceType: 'anchor',
+      sourceType: 'hub',
       targetId: fact2.id,
-      targetType: 'fact',
-      edgeType: 'anchor_to_fact',
+      targetType: 'leaf',
+      edgeType: 'about',
       weight: 0.5,
     });
 

@@ -109,10 +109,10 @@ describe('RerankingContextBuilder', () => {
   ) {
     return edgeRepo.createEdge({
       sourceId: anchorId,
-      sourceType: 'anchor',
+      sourceType: 'hub',
       targetId: factId,
-      targetType: 'fact',
-      edgeType: 'anchor_to_fact',
+      targetType: 'leaf',
+      edgeType: 'about',
       weight,
       initialWeight: weight,
       learningRate: 0.1,

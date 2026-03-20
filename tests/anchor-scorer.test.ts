@@ -34,43 +34,20 @@ function makeNode(overrides: Partial<MemoryNodeDescriptor> = {}): MemoryNodeDesc
 // ────────────────────────────────────────────────────────
 
 describe('inferEdgeType', () => {
-  it('returns anchor_to_fact for anchor → fact', () => {
-    expect(inferEdgeType('anchor', 'fact')).toBe('anchor_to_fact');
+  it('returns about for hub → leaf', () => {
+    expect(inferEdgeType('hub', 'leaf')).toBe('about');
   });
 
-  it('returns anchor_to_episode for anchor → episode', () => {
-    expect(inferEdgeType('anchor', 'episode')).toBe('anchor_to_episode');
+  it('returns related for hub → hub', () => {
+    expect(inferEdgeType('hub', 'hub')).toBe('related');
   });
 
-  it('returns anchor_to_concept for anchor → concept', () => {
-    expect(inferEdgeType('anchor', 'concept')).toBe('anchor_to_concept');
+  it('returns related for leaf → leaf', () => {
+    expect(inferEdgeType('leaf', 'leaf')).toBe('related');
   });
 
-  it('returns anchor_to_anchor for anchor → anchor', () => {
-    expect(inferEdgeType('anchor', 'anchor')).toBe('anchor_to_anchor');
-  });
-
-  it('returns fact_supports_concept for fact → concept', () => {
-    expect(inferEdgeType('fact', 'concept')).toBe('fact_supports_concept');
-  });
-
-  it('returns episode_contains_fact for episode → fact', () => {
-    expect(inferEdgeType('episode', 'fact')).toBe('episode_contains_fact');
-  });
-
-  it('returns episode_mentions_concept for episode → concept', () => {
-    expect(inferEdgeType('episode', 'concept')).toBe('episode_mentions_concept');
-  });
-
-  it('returns concept_related_to for concept → concept', () => {
-    expect(inferEdgeType('concept', 'concept')).toBe('concept_related_to');
-  });
-
-  it('returns derived_from for unmatched combinations', () => {
-    expect(inferEdgeType('fact', 'fact')).toBe('derived_from');
-    expect(inferEdgeType('fact', 'episode')).toBe('derived_from');
-    expect(inferEdgeType('concept', 'fact')).toBe('derived_from');
-    expect(inferEdgeType('episode', 'episode')).toBe('derived_from');
+  it('returns about for leaf → hub', () => {
+    expect(inferEdgeType('leaf', 'hub')).toBe('about');
   });
 });
 
@@ -115,7 +92,7 @@ describe('AnchorScorer', () => {
 
       const nodeA = makeNode({
         id: 'a',
-        type: 'anchor',
+        type: 'hub' as any,
         content: 'TypeScript React frontend development',
         createdAt: now,
         entities: ['TypeScript', 'React'],
@@ -123,7 +100,7 @@ describe('AnchorScorer', () => {
       });
       const nodeB = makeNode({
         id: 'b',
-        type: 'fact',
+        type: 'leaf' as any,
         content: 'TypeScript React component architecture patterns',
         createdAt: now,
         entities: ['TypeScript', 'React'],
@@ -133,11 +110,11 @@ describe('AnchorScorer', () => {
       const result = scorer.scorePair(nodeA, nodeB);
       expect(result.shouldLink).toBe(true);
       expect(result.suggestedWeight).toBeGreaterThan(0.1);
-      expect(result.edgeType).toBe('anchor_to_fact');
+      expect(result.edgeType).toBe('about');
       expect(result.sourceId).toBe('a');
       expect(result.targetId).toBe('b');
-      expect(result.sourceType).toBe('anchor');
-      expect(result.targetType).toBe('fact');
+      expect(result.sourceType).toBe('hub');
+      expect(result.targetType).toBe('leaf');
     });
 
     it('returns low score for unrelated nodes', () => {
@@ -169,13 +146,13 @@ describe('AnchorScorer', () => {
     it('correctly infers edge type from node types', () => {
       const scorer = new AnchorScorer();
 
-      const anchor = makeNode({ id: 'a', type: 'anchor', content: 'topic' });
-      const concept = makeNode({ id: 'b', type: 'concept', content: 'topic' });
-      const episode = makeNode({ id: 'c', type: 'episode', content: 'topic' });
+      const hub = makeNode({ id: 'a', type: 'hub' as any, content: 'topic' });
+      const leaf1 = makeNode({ id: 'b', type: 'leaf' as any, content: 'topic' });
+      const leaf2 = makeNode({ id: 'c', type: 'leaf' as any, content: 'topic' });
 
-      expect(scorer.scorePair(anchor, concept).edgeType).toBe('anchor_to_concept');
-      expect(scorer.scorePair(anchor, episode).edgeType).toBe('anchor_to_episode');
-      expect(scorer.scorePair(episode, concept).edgeType).toBe('episode_mentions_concept');
+      expect(scorer.scorePair(hub, leaf1).edgeType).toBe('about');
+      expect(scorer.scorePair(hub, leaf2).edgeType).toBe('about');
+      expect(scorer.scorePair(leaf1, leaf2).edgeType).toBe('related');
     });
 
     it('provides complete breakdown', () => {
@@ -359,7 +336,7 @@ describe('AnchorScorer', () => {
 
       const nodeA = makeNode({
         id: 'a',
-        type: 'anchor',
+        type: 'hub' as any,
         content: 'TypeScript development',
         createdAt: now,
         entities: ['TypeScript'],
@@ -367,7 +344,7 @@ describe('AnchorScorer', () => {
       });
       const nodeB = makeNode({
         id: 'b',
-        type: 'fact',
+        type: 'leaf' as any,
         content: 'TypeScript development patterns',
         createdAt: now,
         entities: ['TypeScript'],
@@ -381,7 +358,7 @@ describe('AnchorScorer', () => {
       expect(result.previousWeight).toBe(0.5);
       expect(result.sourceId).toBe('a');
       expect(result.targetId).toBe('b');
-      expect(result.edgeType).toBe('anchor_to_fact');
+      expect(result.edgeType).toBe('about');
     });
 
     it('approaches 1.0 asymptotically', () => {
@@ -568,15 +545,15 @@ describe('AnchorScorer', () => {
       const now = new Date().toISOString();
 
       const nodes = [
-        makeNode({ id: 'n1', type: 'anchor', createdAt: now }),
-        makeNode({ id: 'n2', type: 'fact', createdAt: now }),
-        makeNode({ id: 'n3', type: 'concept', createdAt: now }),
+        makeNode({ id: 'n1', type: 'hub' as any, createdAt: now }),
+        makeNode({ id: 'n2', type: 'leaf' as any, createdAt: now }),
+        makeNode({ id: 'n3', type: 'leaf' as any, createdAt: now }),
       ];
 
       const weights = new Map<string, number>();
-      weights.set(`n1:n2:anchor_to_fact`, 0.5);
-      weights.set(`n1:n3:anchor_to_concept`, 0.3);
-      weights.set(`n2:n3:fact_supports_concept`, 0.4);
+      weights.set(`n1:n2:about`, 0.5);
+      weights.set(`n1:n3:about`, 0.3);
+      weights.set(`n2:n3:related`, 0.4);
 
       const results = scorer.batchReinforce(weights, nodes);
 
@@ -593,8 +570,8 @@ describe('AnchorScorer', () => {
       const now = new Date().toISOString();
 
       const nodes = [
-        makeNode({ id: 'n1', type: 'fact', createdAt: now }),
-        makeNode({ id: 'n2', type: 'fact', createdAt: now }),
+        makeNode({ id: 'n1', type: 'leaf' as any, createdAt: now }),
+        makeNode({ id: 'n2', type: 'leaf' as any, createdAt: now }),
       ];
 
       const weights = new Map<string, number>(); // empty map
@@ -626,7 +603,7 @@ describe('AnchorScorer', () => {
         makeNode({ id: 'n2', createdAt: now }),
       ];
 
-      const weights = new Map([['n1:n2:derived_from', 0.5]]);
+      const weights = new Map([['n1:n2:related', 0.5]]);
 
       const resultsDefault = scorer.batchReinforce(weights, nodes);
       const resultsCustom = scorer.batchReinforce(weights, nodes, 0.5);

@@ -72,15 +72,11 @@ describe('ConversationRepository', () => {
       }
     });
 
-    it('generates unique UUIDs for conversation and each message', () => {
+    it('generates unique UUIDs for conversations', () => {
       const c1 = ingestSample();
       const c2 = ingestSample();
 
       expect(c1.id).not.toBe(c2.id);
-
-      const allIds = [...c1.messages, ...c2.messages].map(m => m.id);
-      const uniqueIds = new Set(allIds);
-      expect(uniqueIds.size).toBe(allIds.length);
     });
 
     it('accepts and uses a custom conversation ID', () => {
@@ -114,7 +110,7 @@ describe('ConversationRepository', () => {
         messages: [{ role: 'user', content }],
       });
 
-      const fetched = repo.getMessage(conv.messages[0]!.id);
+      const fetched = repo.getMessage(conv.id, conv.messages[0]!.turnIndex);
       expect(fetched!.content).toBe(content);
     });
 
@@ -125,7 +121,7 @@ describe('ConversationRepository', () => {
         messages: [{ role: 'user', content: largeContent }],
       });
 
-      const fetched = repo.getMessage(conv.messages[0]!.id);
+      const fetched = repo.getMessage(conv.id, conv.messages[0]!.turnIndex);
       expect(fetched!.content.length).toBe(100_000);
     });
   });
@@ -161,14 +157,14 @@ describe('ConversationRepository', () => {
 
     it('preserves all existing messages when appending', () => {
       const conv = ingestSample();
-      const origIds = conv.messages.map(m => m.id);
+      const origTurnIndices = conv.messages.map(m => m.turnIndex);
 
       repo.appendMessage({ conversationId: conv.id, role: 'user', content: 'New' });
 
       const fetched = repo.getConversation(conv.id);
       expect(fetched!.messages).toHaveLength(3);
-      expect(fetched!.messages[0]!.id).toBe(origIds[0]);
-      expect(fetched!.messages[1]!.id).toBe(origIds[1]);
+      expect(fetched!.messages[0]!.turnIndex).toBe(origTurnIndices[0]);
+      expect(fetched!.messages[1]!.turnIndex).toBe(origTurnIndices[1]);
     });
 
     it('supports appending many messages sequentially', () => {
@@ -207,18 +203,20 @@ describe('ConversationRepository', () => {
   });
 
   describe('getMessage', () => {
-    it('retrieves a single message by ID', () => {
+    it('retrieves a single message by composite key (conversationId, turnIndex)', () => {
       const conv = ingestSample();
-      const msgId = conv.messages[0]!.id;
 
-      const msg = repo.getMessage(msgId);
+      const msg = repo.getMessage(conv.id, 0);
       expect(msg).not.toBeNull();
-      expect(msg!.id).toBe(msgId);
+      expect(msg!.conversationId).toBe(conv.id);
+      expect(msg!.turnIndex).toBe(0);
       expect(msg!.content).toBe('Hello');
     });
 
-    it('returns null for non-existent message ID', () => {
-      expect(repo.getMessage('no-such-msg')).toBeNull();
+    it('returns null for non-existent composite key', () => {
+      expect(repo.getMessage('no-such-conv', 0)).toBeNull();
+      const conv = ingestSample();
+      expect(repo.getMessage(conv.id, 999)).toBeNull();
     });
   });
 
@@ -461,7 +459,6 @@ describe('ConversationRepository', () => {
       const conv = ingestSample();
       const origContent0 = conv.messages[0]!.content;
       const origContent1 = conv.messages[1]!.content;
-      const origId0 = conv.messages[0]!.id;
 
       // Append several messages
       for (let i = 0; i < 5; i++) {
@@ -469,7 +466,7 @@ describe('ConversationRepository', () => {
       }
 
       // Verify originals are intact
-      const msg0 = repo.getMessage(origId0);
+      const msg0 = repo.getMessage(conv.id, 0);
       expect(msg0!.content).toBe(origContent0);
 
       const allMsgs = repo.getMessages(conv.id);

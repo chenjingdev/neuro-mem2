@@ -1,60 +1,70 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChatPage } from './pages/ChatPage';
 import { MemoryExplorerPage } from './pages/MemoryExplorerPage';
 import { GraphExplorerPage } from './pages/GraphExplorerPage';
-import { GraphMapPage } from './pages/GraphMapPage';
-import { DecayMonitorPage } from './pages/DecayMonitorPage';
 
 /**
  * App — root component for the nero-mem2 Visual Debug UI.
  *
- * Supports five views:
+ * Three views:
  *   1. ChatPage — SSE streaming chat with pipeline trace visualization
  *   2. MemoryExplorerPage — layer-by-layer memory node exploration
- *   3. GraphExplorerPage — sigma.js local graph exploration (ego-network)
- *   4. GraphMapPage — sigma.js global map visualization (全체 맵)
- *   5. DecayMonitorPage — decay simulation chart + edge weight/shield monitor
+ *   3. GraphExplorerPage — sigma.js graph (global map + local ego-network + deepK)
  *
- * Simple client-side routing via state (no React Router needed).
+ * Uses history.pushState so browser back button works across views.
  */
 
-type AppView = 'chat' | 'memory-explorer' | 'graph-explorer' | 'graph-map' | 'decay-monitor';
+type AppView = 'chat' | 'memory-explorer' | 'graph-explorer';
 
 interface GraphExplorerState {
   initialNodeId?: string;
+}
+
+function pushView(view: AppView, extra?: Record<string, unknown>) {
+  history.pushState({ view, ...extra }, '', undefined);
 }
 
 export function App() {
   const [view, setView] = useState<AppView>('chat');
   const [graphState, setGraphState] = useState<GraphExplorerState>({});
 
-  const navigateToChat = useCallback(() => setView('chat'), []);
-  const navigateToExplorer = useCallback(() => setView('memory-explorer'), []);
+  // Replace initial history entry with chat state
+  useEffect(() => {
+    history.replaceState({ view: 'chat' }, '', undefined);
+  }, []);
+
+  // Listen for browser back/forward
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      const state = e.state as { view?: AppView; initialNodeId?: string } | null;
+      if (state?.view) {
+        setView(state.view);
+        if (state.view === 'graph-explorer') {
+          setGraphState({ initialNodeId: state.initialNodeId });
+        }
+      } else {
+        setView('chat');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigateToChat = useCallback(() => {
+    setView('chat');
+    pushView('chat');
+  }, []);
+
+  const navigateToExplorer = useCallback(() => {
+    setView('memory-explorer');
+    pushView('memory-explorer');
+  }, []);
+
   const navigateToGraph = useCallback((nodeId?: string) => {
     setGraphState({ initialNodeId: nodeId });
     setView('graph-explorer');
+    pushView('graph-explorer', { initialNodeId: nodeId });
   }, []);
-  const navigateToGlobalMap = useCallback(() => setView('graph-map'), []);
-  const navigateToDecayMonitor = useCallback(() => setView('decay-monitor'), []);
-
-  if (view === 'decay-monitor') {
-    return (
-      <DecayMonitorPage
-        onNavigateToChat={navigateToChat}
-        onNavigateToExplorer={navigateToExplorer}
-        onNavigateToGraph={navigateToGraph}
-      />
-    );
-  }
-
-  if (view === 'graph-map') {
-    return (
-      <GraphMapPage
-        onNavigateToChat={navigateToChat}
-        onNavigateToExplorer={navigateToExplorer}
-      />
-    );
-  }
 
   if (view === 'graph-explorer') {
     return (
@@ -74,34 +84,14 @@ export function App() {
     <div className="app-with-nav">
       <ChatPage />
       {/* Floating nav buttons */}
-      <button
-        className="nav-fab nav-fab-graph"
-        onClick={() => navigateToGraph()}
-        title="Open Graph Explorer"
-      >
-        🕸
-      </button>
-      <button
-        className="nav-fab nav-fab-global-map"
-        onClick={navigateToGlobalMap}
-        title="Open Global Map"
-      >
-        🗺️
-      </button>
-      <button
-        className="nav-fab nav-fab-memory"
-        onClick={navigateToExplorer}
-        title="Open Memory Explorer"
-      >
-        🧠
-      </button>
-      <button
-        className="nav-fab nav-fab-decay"
-        onClick={navigateToDecayMonitor}
-        title="Open Decay Monitor"
-      >
-        📉
-      </button>
+      <div className="nav-fab nav-fab-memory" onClick={navigateToExplorer}>
+        🧠 Memory
+        <span className="fab-tooltip">저장된 메모리 노드를 필터/검색/상세 조회</span>
+      </div>
+      <div className="nav-fab nav-fab-graph" onClick={() => navigateToGraph()}>
+        🕸 Graph
+        <span className="fab-tooltip">메모리 그래프 시각화 — 전체 맵 / 노드 중심 / DeepK</span>
+      </div>
     </div>
   );
 }

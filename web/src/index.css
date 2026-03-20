@@ -3027,28 +3027,125 @@ body {
 
 .nav-fab {
   position: fixed;
-  bottom: 24px;
   right: 24px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 22px;
+  font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
   transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
   z-index: 100;
+  white-space: nowrap;
 }
 
 .nav-fab:hover {
-  transform: scale(1.1);
+  transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(0,0,0,0.5);
   background: var(--surface-2);
+}
+
+.fab-tooltip {
+  display: none;
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+.fab-tooltip::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.nav-fab:hover .fab-tooltip {
+  display: block;
+}
+
+/* Header help badge with custom tooltip */
+.header-help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(74, 158, 255, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.header-help:hover {
+  background: rgba(74, 158, 255, 0.25);
+}
+
+.header-help .help-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 240px;
+  max-width: 320px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 200;
+  pointer-events: none;
+}
+
+.header-help .help-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.header-help:hover .help-tooltip {
+  display: block;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4249,25 +4346,13 @@ body {
   flex: 1;
 }
 
-/* Graph nav FABs */
-.nav-fab-graph {
-  bottom: 80px;
-  right: 24px;
-}
-
-.nav-fab-global-map {
-  bottom: 136px;
-  right: 24px;
-}
-
+/* Nav FAB positions — 2 buttons stacked */
 .nav-fab-memory {
   bottom: 24px;
-  right: 24px;
 }
 
-.nav-fab-decay {
-  bottom: 192px;
-  right: 24px;
+.nav-fab-graph {
+  bottom: 68px;
 }
 
 /* ══════════════════════════════════════════════════════════════

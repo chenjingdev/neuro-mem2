@@ -355,11 +355,12 @@ describe('Batch Extraction E2E: Session End → Extract → Store', () => {
     expect(storedEpisodes[2]!.title).toBe('Started converting utility files');
     expect(storedEpisodes[2]!.type).toBe('action');
 
-    // Episodes should have source message IDs from the original conversation
+    // Episodes should have source message IDs from the original conversation (format: 'convId:turnIndex')
     for (const ep of storedEpisodes) {
       expect(ep.sourceMessageIds.length).toBeGreaterThan(0);
-      for (const msgId of ep.sourceMessageIds) {
-        const msg = convRepo.getMessage(msgId);
+      for (const sourceRef of ep.sourceMessageIds) {
+        const [convId, turnStr] = sourceRef.split(':');
+        const msg = convRepo.getMessage(convId!, Number(turnStr));
         expect(msg).not.toBeNull();
       }
     }
@@ -470,9 +471,10 @@ describe('Batch Extraction E2E: Session End → Extract → Store', () => {
     const ep0 = episodes[0]!;
     expect(ep0.sourceMessageIds).toHaveLength(2);
 
-    // Verify the actual messages match the turn range
-    for (const msgId of ep0.sourceMessageIds) {
-      const msg = convRepo.getMessage(msgId);
+    // Verify the actual messages match the turn range (sourceMessageIds format: 'convId:turnIndex')
+    for (const sourceRef of ep0.sourceMessageIds) {
+      const [convId, turnStr] = sourceRef.split(':');
+      const msg = convRepo.getMessage(convId!, Number(turnStr));
       expect(msg).not.toBeNull();
       expect(msg!.turnIndex).toBeGreaterThanOrEqual(ep0.startTurnIndex);
       expect(msg!.turnIndex).toBeLessThanOrEqual(ep0.endTurnIndex);

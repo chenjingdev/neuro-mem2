@@ -190,7 +190,7 @@ describe('FactIngestionPipeline with anchor linking', () => {
       const edges = edgeRepo.getOutgoingEdges(anchor.id);
       expect(edges).toHaveLength(1);
       expect(edges[0].targetId).toBe(fact.id);
-      expect(edges[0].edgeType).toBe('anchor_to_fact');
+      expect(edges[0].edgeType).toBe('about');
       expect(edges[0].weight).toBe(0.85);
 
       // Verify anchor activation was recorded (Hebbian signal)
@@ -290,7 +290,7 @@ describe('FactIngestionPipeline with anchor linking', () => {
       const edges = edgeRepo.getOutgoingEdges(newAnchor!.id);
       expect(edges).toHaveLength(1);
       expect(edges[0].targetId).toBe(result.facts[0].id);
-      expect(edges[0].edgeType).toBe('anchor_to_fact');
+      expect(edges[0].edgeType).toBe('about');
     });
 
     it('creates multiple new anchors from a single fact', async () => {
@@ -357,7 +357,7 @@ describe('FactIngestionPipeline with anchor linking', () => {
       expect(linkResult.createdAnchors[0].label).toBe('Backend Preferences');
 
       // Total 2 edges in DB (one per anchor→fact)
-      const allEdges = edgeRepo.queryEdges({ edgeTypes: ['anchor_to_fact'] });
+      const allEdges = edgeRepo.queryEdges({ edgeTypes: ['about'] });
       expect(allEdges).toHaveLength(2);
     });
   });

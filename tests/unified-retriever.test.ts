@@ -204,10 +204,10 @@ describe('UnifiedRetriever', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.8,
       });
 
@@ -260,10 +260,10 @@ describe('UnifiedRetriever', () => {
 
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.5,
       });
 
@@ -439,10 +439,10 @@ describe('UnifiedRetriever', () => {
         const fact = createFact(`Fact ${i}`, conv.id);
         edgeRepo.createEdge({
           sourceId: anchor.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: 0.9 - i * 0.05,
         });
       }
@@ -466,10 +466,10 @@ describe('UnifiedRetriever', () => {
       const fact = createFact('Low score fact', conv.id);
       edgeRepo.createEdge({
         sourceId: anchor.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: fact.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.02, // Very low → propagated score will be tiny
       });
 
@@ -507,10 +507,10 @@ describe('UnifiedRetriever', () => {
       for (const [fact, weight] of [[fact1, 0.9], [fact2, 0.7], [fact3, 0.6]] as const) {
         edgeRepo.createEdge({
           sourceId: tsAnchor.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight,
         });
       }

@@ -232,7 +232,8 @@ describe('HebbianWeightUpdater', () => {
     });
 
     it('weight never exceeds maxWeight', () => {
-      const updater = new HebbianWeightUpdater({ learningRate: 1.0, useHeadroom: false });
+      // Use explicit maxWeight=1.0 to test clamping (default is WEIGHT_CAP=100)
+      const updater = new HebbianWeightUpdater({ learningRate: 1.0, useHeadroom: false, maxWeight: 1.0 });
       const result = updater.computeUpdate({
         currentWeight: 0.95,
         source: { nodeId: 's', activationCount: 100, activationLevel: 1.0 },

@@ -593,6 +593,13 @@ export function GraphExplorerPage({
               : viewMode === 'deepk' ? '🎯 Graph Explorer — DeepK View'
               : '🔍 Graph Explorer — Local View'}
           </h1>
+          <span className="header-help">?<span className="help-tooltip">{
+            viewMode === 'global'
+              ? 'Global: 전체 메모리 그래프를 축약 표시. Hub 노드 우선, 나머지 Leaf 노드 샘플링. 노드 클릭 → Local 탐색.'
+              : viewMode === 'deepk'
+              ? 'DeepK: 선택한 노드 중심 BFS 탐색. 깊이(hops)를 조절해 연결 범위를 확장/축소.'
+              : 'Local: 선택한 노드 주변의 이웃 그래프. 이웃 클릭으로 탐색, ← 뒤로가기로 이전 노드 복귀.'
+          }</span></span>
         </div>
 
         <div className="header-center">
@@ -601,6 +608,7 @@ export function GraphExplorerPage({
             <button
               className={`gep-toggle-btn ${viewMode === 'global' ? 'active' : ''}`}
               onClick={handleBackToGlobal}
+              title="전체 그래프 축약 뷰 — Hub 우선 표시"
             >
               🗺️ Global
             </button>
@@ -608,6 +616,7 @@ export function GraphExplorerPage({
               className={`gep-toggle-btn ${viewMode === 'local' ? 'active' : ''}`}
               disabled={!centerNodeId && viewMode !== 'local'}
               onClick={() => { if (centerNodeId) { setViewMode('local'); } }}
+              title="선택 노드의 이웃 그래프 — 클릭으로 탐색"
             >
               🔍 Local
             </button>
@@ -615,7 +624,7 @@ export function GraphExplorerPage({
               className={`gep-toggle-btn ${viewMode === 'deepk' ? 'active' : ''}`}
               disabled={!centerNodeId}
               onClick={handleSwitchToDeepK}
-              title="Concentric depth rings view"
+              title="동심원 깊이 탐색 — BFS hops 조절"
             >
               🎯 DeepK
             </button>

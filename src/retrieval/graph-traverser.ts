@@ -169,17 +169,23 @@ export class GraphTraverser {
           continue; // Already found via a better path
         }
 
-        // Collect the target node based on type
-        if (targetType === 'fact' && collectTypes.has('fact')) {
-          if (!factScores.has(targetId)) totalCollected++;
-          factScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
-        } else if (targetType === 'episode' && collectTypes.has('episode')) {
-          if (!episodeScores.has(targetId)) totalCollected++;
-          episodeScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
-        } else if (targetType === 'concept' && collectTypes.has('concept')) {
-          if (!conceptScores.has(targetId)) totalCollected++;
-          conceptScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
+        // Collect the target node based on type.
+        // DB stores 'hub'/'leaf'; for 'leaf' nodes, resolve entity type by trying each repo.
+        // 'hub' nodes are anchors — continue BFS without collecting.
+        if (targetType === 'leaf') {
+          const resolved = this.resolveLeafType(targetId);
+          if (resolved === 'fact' && collectTypes.has('fact')) {
+            if (!factScores.has(targetId)) totalCollected++;
+            factScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
+          } else if (resolved === 'episode' && collectTypes.has('episode')) {
+            if (!episodeScores.has(targetId)) totalCollected++;
+            episodeScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
+          } else if (resolved === 'concept' && collectTypes.has('concept')) {
+            if (!conceptScores.has(targetId)) totalCollected++;
+            conceptScores.set(targetId, { score: accWeight, depth: depth + 1, sourceAnchorId });
+          }
         }
+        // 'hub' targets are anchors — enqueue for BFS traversal but don't collect
 
         // Continue traversal from this node (if not yet visited)
         if (!visited.has(targetId) && depth + 1 < maxDepth) {
@@ -209,15 +215,27 @@ export class GraphTraverser {
   // ── Private helpers ──
 
   private getExistingScore(
-    targetType: string,
+    _targetType: string,
     targetId: string,
     factScores: Map<string, { score: number }>,
     episodeScores: Map<string, { score: number }>,
     conceptScores: Map<string, { score: number }>,
   ): number | null {
-    if (targetType === 'fact') return factScores.get(targetId)?.score ?? null;
-    if (targetType === 'episode') return episodeScores.get(targetId)?.score ?? null;
-    if (targetType === 'concept') return conceptScores.get(targetId)?.score ?? null;
+    // DB stores 'hub'/'leaf'; check all score maps by targetId
+    return factScores.get(targetId)?.score
+      ?? episodeScores.get(targetId)?.score
+      ?? conceptScores.get(targetId)?.score
+      ?? null;
+  }
+
+  /**
+   * Resolve a 'leaf' node's entity type by trying each entity repository.
+   * Returns 'fact', 'episode', or 'concept' (or null if not found).
+   */
+  private resolveLeafType(nodeId: string): 'fact' | 'episode' | 'concept' | null {
+    if (this.factRepo.getById(nodeId)) return 'fact';
+    if (this.episodeRepo.getEpisode(nodeId)) return 'episode';
+    if (this.conceptRepo.getConcept(nodeId)) return 'concept';
     return null;
   }
 

@@ -67,7 +67,7 @@ describe('Raw Conversation Ingestion', () => {
       expect(result.messages[0]!.content).toBe(content);
     });
 
-    it('should generate unique IDs for each conversation and message', () => {
+    it('should generate unique IDs for each conversation', () => {
       const r1 = service.ingestConversation({
         source: 'test',
         messages: [{ role: 'user', content: 'Hello' }],
@@ -78,7 +78,6 @@ describe('Raw Conversation Ingestion', () => {
       });
 
       expect(r1.id).not.toBe(r2.id);
-      expect(r1.messages[0]!.id).not.toBe(r2.messages[0]!.id);
     });
 
     it('should store metadata as JSON', () => {
@@ -213,10 +212,8 @@ describe('Raw Conversation Ingestion', () => {
         messages: [{ role: 'user', content: 'Original content' }],
       });
 
-      const msgId = conv.messages[0]!.id;
-
-      // Verify original content
-      const original = repo.getMessage(msgId);
+      // Verify original content using composite key
+      const original = repo.getMessage(conv.id, 0);
       expect(original!.content).toBe('Original content');
 
       // Even though SQLite allows UPDATE, the API does not expose mutation
@@ -233,9 +230,6 @@ describe('Raw Conversation Ingestion', () => {
         ],
       });
 
-      const originalMsg1Id = conv.messages[0]!.id;
-      const originalMsg2Id = conv.messages[1]!.id;
-
       service.appendMessage({
         conversationId: conv.id,
         role: 'user',
@@ -243,9 +237,9 @@ describe('Raw Conversation Ingestion', () => {
       });
 
       const full = service.getConversation(conv.id);
-      expect(full!.messages[0]!.id).toBe(originalMsg1Id);
+      expect(full!.messages[0]!.turnIndex).toBe(0);
       expect(full!.messages[0]!.content).toBe('Message 1');
-      expect(full!.messages[1]!.id).toBe(originalMsg2Id);
+      expect(full!.messages[1]!.turnIndex).toBe(1);
       expect(full!.messages[1]!.content).toBe('Message 2');
       expect(full!.messages[2]!.content).toBe('Message 3');
     });

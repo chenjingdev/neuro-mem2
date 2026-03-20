@@ -168,8 +168,8 @@ describe('simulateEdgeDecay', () => {
 
   it('should apply custom shieldDecayRate', () => {
     const edge = makeEdge({ shield: 20, lastActivatedAtEvent: 0 });
-    const fastShield = simulateEdgeDecay(edge, { totalSteps: 50, shieldDecayRate: 2.0 });
-    const slowShield = simulateEdgeDecay(edge, { totalSteps: 50, shieldDecayRate: 0.1 });
+    const fastShield = simulateEdgeDecay(edge, { totalSteps: 250, shieldDecayRate: 2.0 });
+    const slowShield = simulateEdgeDecay(edge, { totalSteps: 250, shieldDecayRate: 0.1 });
 
     // Fast shield decay → shield depletes sooner
     expect(fastShield.summary.shieldDepletedStep!).toBeLessThan(slowShield.summary.shieldDepletedStep!);

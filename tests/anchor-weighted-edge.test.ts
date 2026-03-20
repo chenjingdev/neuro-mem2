@@ -43,20 +43,13 @@ describe('Anchor & WeightedEdge Models', () => {
     });
 
     it('should define all weighted edge types', () => {
-      // Existing edge types
-      expect(WEIGHTED_EDGE_TYPES).toContain('episode_mentions_concept');
-      expect(WEIGHTED_EDGE_TYPES).toContain('concept_related_to');
-      expect(WEIGHTED_EDGE_TYPES).toContain('fact_supports_concept');
-      expect(WEIGHTED_EDGE_TYPES).toContain('episode_contains_fact');
-      expect(WEIGHTED_EDGE_TYPES).toContain('temporal_next');
-      expect(WEIGHTED_EDGE_TYPES).toContain('derived_from');
-      // Anchor-specific
-      expect(WEIGHTED_EDGE_TYPES).toContain('anchor_to_fact');
-      expect(WEIGHTED_EDGE_TYPES).toContain('anchor_to_episode');
-      expect(WEIGHTED_EDGE_TYPES).toContain('anchor_to_concept');
-      expect(WEIGHTED_EDGE_TYPES).toContain('anchor_to_anchor');
-      expect(WEIGHTED_EDGE_TYPES).toContain('query_activated');
-      expect(WEIGHTED_EDGE_TYPES).toHaveLength(11);
+      expect(WEIGHTED_EDGE_TYPES).toContain('about');
+      expect(WEIGHTED_EDGE_TYPES).toContain('related');
+      expect(WEIGHTED_EDGE_TYPES).toContain('caused');
+      expect(WEIGHTED_EDGE_TYPES).toContain('precedes');
+      expect(WEIGHTED_EDGE_TYPES).toContain('refines');
+      expect(WEIGHTED_EDGE_TYPES).toContain('contradicts');
+      expect(WEIGHTED_EDGE_TYPES).toHaveLength(6);
     });
   });
 
@@ -291,20 +284,20 @@ describe('Anchor & WeightedEdge Models', () => {
     it('should create a weighted edge with defaults', () => {
       const input: CreateWeightedEdgeInput = {
         sourceId: anchorId,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: factId,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
       };
 
       const edge = weightedEdgeRepo.createEdge(input);
 
       expect(edge.id).toBeDefined();
       expect(edge.sourceId).toBe(anchorId);
-      expect(edge.sourceType).toBe('anchor');
+      expect(edge.sourceType).toBe('hub');
       expect(edge.targetId).toBe(factId);
-      expect(edge.targetType).toBe('fact');
-      expect(edge.edgeType).toBe('anchor_to_fact');
+      expect(edge.targetType).toBe('leaf');
+      expect(edge.edgeType).toBe('about');
       expect(edge.weight).toBe(0.5);
       expect(edge.initialWeight).toBe(0.5);
       expect(edge.learningRate).toBe(0.1);
@@ -316,10 +309,10 @@ describe('Anchor & WeightedEdge Models', () => {
     it('should create a weighted edge with custom parameters', () => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: anchorId,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: factId,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.8,
         learningRate: 0.2,
         decayRate: 0.05,
@@ -336,10 +329,10 @@ describe('Anchor & WeightedEdge Models', () => {
     it('should retrieve a weighted edge by ID', () => {
       const created = weightedEdgeRepo.createEdge({
         sourceId: anchorId,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: factId,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
       });
 
       const retrieved = weightedEdgeRepo.getEdge(created.id);
@@ -355,13 +348,13 @@ describe('Anchor & WeightedEdge Models', () => {
     it('should find edge by endpoints', () => {
       weightedEdgeRepo.createEdge({
         sourceId: anchorId,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: factId,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
       });
 
-      const found = weightedEdgeRepo.findEdge(anchorId, factId, 'anchor_to_fact');
+      const found = weightedEdgeRepo.findEdge(anchorId, factId, 'about');
       expect(found).not.toBeNull();
       expect(found!.sourceId).toBe(anchorId);
       expect(found!.targetId).toBe(factId);
@@ -369,9 +362,9 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should save batch of edges transactionally', () => {
       const inputs: CreateWeightedEdgeInput[] = [
-        { sourceId: anchorId, sourceType: 'anchor', targetId: 'fact-1', targetType: 'fact', edgeType: 'anchor_to_fact' },
-        { sourceId: anchorId, sourceType: 'anchor', targetId: 'fact-2', targetType: 'fact', edgeType: 'anchor_to_fact' },
-        { sourceId: anchorId, sourceType: 'anchor', targetId: 'ep-1', targetType: 'episode', edgeType: 'anchor_to_episode' },
+        { sourceId: anchorId, sourceType: 'hub', targetId: 'fact-1', targetType: 'leaf', edgeType: 'about' },
+        { sourceId: anchorId, sourceType: 'hub', targetId: 'fact-2', targetType: 'leaf', edgeType: 'about' },
+        { sourceId: anchorId, sourceType: 'hub', targetId: 'ep-1', targetType: 'leaf', edgeType: 'about' },
       ];
 
       const edges = weightedEdgeRepo.saveEdges(inputs);
@@ -385,14 +378,14 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should get outgoing edges ordered by weight', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: anchorId, sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.3,
+        sourceId: anchorId, sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: anchorId, sourceType: 'anchor',
-        targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: anchorId, sourceType: 'hub',
+        targetId: 'f2', targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
 
       const edges = weightedEdgeRepo.getOutgoingEdges(anchorId);
@@ -403,14 +396,14 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should get incoming edges', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: factId, targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: factId, targetType: 'leaf',
+        edgeType: 'about',
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'a2', sourceType: 'anchor',
-        targetId: factId, targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'a2', sourceType: 'hub',
+        targetId: factId, targetType: 'leaf',
+        edgeType: 'about',
       });
 
       const edges = weightedEdgeRepo.getIncomingEdges(factId);
@@ -419,14 +412,14 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should get connected edges (both directions)', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: anchorId, sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: anchorId, sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about',
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'other-anchor', sourceType: 'anchor',
-        targetId: anchorId, targetType: 'anchor',
-        edgeType: 'anchor_to_anchor',
+        sourceId: 'other-anchor', sourceType: 'hub',
+        targetId: anchorId, targetType: 'hub',
+        edgeType: 'related',
       });
 
       const edges = weightedEdgeRepo.getConnectedEdges(anchorId);
@@ -435,9 +428,9 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should delete a weighted edge', () => {
       const edge = weightedEdgeRepo.createEdge({
-        sourceId: anchorId, sourceType: 'anchor',
-        targetId: factId, targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: anchorId, sourceType: 'hub',
+        targetId: factId, targetType: 'leaf',
+        edgeType: 'about',
       });
 
       expect(weightedEdgeRepo.deleteEdge(edge.id)).toBe(true);
@@ -446,16 +439,16 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should enforce unique constraint on (source_id, target_id, edge_type)', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: anchorId, sourceType: 'anchor',
-        targetId: factId, targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: anchorId, sourceType: 'hub',
+        targetId: factId, targetType: 'leaf',
+        edgeType: 'about',
       });
 
       expect(() => {
         weightedEdgeRepo.createEdge({
-          sourceId: anchorId, sourceType: 'anchor',
-          targetId: factId, targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          sourceId: anchorId, sourceType: 'hub',
+          targetId: factId, targetType: 'leaf',
+          edgeType: 'about',
         });
       }).toThrow();
     });
@@ -469,10 +462,10 @@ describe('Anchor & WeightedEdge Models', () => {
     beforeEach(() => {
       const edge = weightedEdgeRepo.createEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.5,
         learningRate: 0.1,
       });
@@ -524,9 +517,9 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should batch reinforce multiple edges', () => {
       const edge2 = weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'fact-2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.3,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'fact-2', targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
 
       const results = weightedEdgeRepo.batchReinforce({
@@ -546,14 +539,14 @@ describe('Anchor & WeightedEdge Models', () => {
   describe('Weight decay', () => {
     it('should apply event-based decay to all edges', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.5, currentEvent: 0,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 80, decayRate: 0.5, currentEvent: 0,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 50, decayRate: 0.5, currentEvent: 0,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f2', targetType: 'leaf',
+        edgeType: 'about', weight: 50, decayRate: 0.5, currentEvent: 0,
       });
 
       // 10 events pass: decayAmount = 0.5 * 10 = 5
@@ -568,14 +561,14 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should prune edges below threshold', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.1, currentEvent: 0,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 80, decayRate: 0.1, currentEvent: 0,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 5, decayRate: 1.0, currentEvent: 0,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f2', targetType: 'leaf',
+        edgeType: 'about', weight: 5, decayRate: 1.0, currentEvent: 0,
       });
 
       // 10 events: edge2 decayAmount = 1.0 * 10 = 10 → weight = 5 - 10 → 0
@@ -586,9 +579,9 @@ describe('Anchor & WeightedEdge Models', () => {
 
     it('should not decay edges with zero decay rate', () => {
       weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 80, decayRate: 0.0, currentEvent: 0,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 80, decayRate: 0.0, currentEvent: 0,
       });
 
       weightedEdgeRepo.applyDecay({ currentEvent: 10 });
@@ -603,24 +596,24 @@ describe('Anchor & WeightedEdge Models', () => {
   describe('WeightedEdge query filters', () => {
     beforeEach(() => {
       weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-a', sourceType: 'anchor',
-        targetId: 'fact-1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: 'anchor-a', sourceType: 'hub',
+        targetId: 'fact-1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-a', sourceType: 'anchor',
-        targetId: 'ep-1', targetType: 'episode',
-        edgeType: 'anchor_to_episode', weight: 0.6,
+        sourceId: 'anchor-a', sourceType: 'hub',
+        targetId: 'ep-1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.6,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-a', sourceType: 'anchor',
-        targetId: 'concept-1', targetType: 'concept',
-        edgeType: 'anchor_to_concept', weight: 0.3,
+        sourceId: 'anchor-a', sourceType: 'hub',
+        targetId: 'concept-1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
       weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-a', sourceType: 'anchor',
-        targetId: 'anchor-b', targetType: 'anchor',
-        edgeType: 'anchor_to_anchor', weight: 0.7,
+        sourceId: 'anchor-a', sourceType: 'hub',
+        targetId: 'anchor-b', targetType: 'hub',
+        edgeType: 'related', weight: 0.7,
       });
     });
 
@@ -630,16 +623,15 @@ describe('Anchor & WeightedEdge Models', () => {
     });
 
     it('should filter by target type', () => {
-      const edges = weightedEdgeRepo.queryEdges({ targetType: 'fact' });
-      expect(edges).toHaveLength(1);
-      expect(edges[0].targetId).toBe('fact-1');
+      const edges = weightedEdgeRepo.queryEdges({ targetType: 'leaf' });
+      expect(edges).toHaveLength(3);
     });
 
     it('should filter by edge types', () => {
       const edges = weightedEdgeRepo.queryEdges({
-        edgeTypes: ['anchor_to_fact', 'anchor_to_episode'],
+        edgeTypes: ['about', 'related'],
       });
-      expect(edges).toHaveLength(2);
+      expect(edges).toHaveLength(4);
     });
 
     it('should filter by minimum weight', () => {
@@ -703,7 +695,7 @@ describe('Anchor & WeightedEdge Models', () => {
           INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
             edge_type, weight, initial_weight, shield, learning_rate, decay_rate,
             activation_count, last_activated_at_event, created_at, updated_at)
-          VALUES ('x', 'a', 'anchor', 'b', 'fact', 'anchor_to_fact',
+          VALUES ('x', 'a', 'hub', 'b', 'leaf', 'about',
             150, 0.5, 0, 0.1, 0.01, 0, 0, '2024-01-01', '2024-01-01')
         `).run();
       }).toThrow();
@@ -715,7 +707,7 @@ describe('Anchor & WeightedEdge Models', () => {
           INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
             edge_type, weight, initial_weight, learning_rate, decay_rate,
             activation_count, created_at, updated_at)
-          VALUES ('x', 'a', 'anchor', 'b', 'fact', 'invalid_edge_type',
+          VALUES ('x', 'a', 'hub', 'b', 'leaf', 'invalid_edge_type',
             0.5, 0.5, 0.1, 0.01, 0, '2024-01-01', '2024-01-01')
         `).run();
       }).toThrow();
@@ -727,7 +719,7 @@ describe('Anchor & WeightedEdge Models', () => {
           INSERT INTO weighted_edges (id, source_id, source_type, target_id, target_type,
             edge_type, weight, initial_weight, learning_rate, decay_rate,
             activation_count, created_at, updated_at)
-          VALUES ('x', 'a', 'invalid', 'b', 'fact', 'anchor_to_fact',
+          VALUES ('x', 'a', 'invalid', 'b', 'leaf', 'about',
             0.5, 0.5, 0.1, 0.01, 0, '2024-01-01', '2024-01-01')
         `).run();
       }).toThrow();

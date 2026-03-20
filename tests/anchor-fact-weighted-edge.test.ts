@@ -92,7 +92,7 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
 
   // ── 1. Correct source/target types ────────────────────────────
 
-  it('creates edge with sourceType=anchor and targetType=fact when connecting to existing anchor', async () => {
+  it('creates edge with sourceType=hub and targetType=leaf when connecting to existing anchor', async () => {
     const anchor = anchorRepo.createAnchor({
       label: 'TypeScript',
       description: 'TS lang',
@@ -108,13 +108,13 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     const result = await linker.linkFact(fact, [makeCandidate(anchor.id, 'TypeScript')]);
 
     const edge = edgeRepo.getEdge(result.connectedEdges[0].edgeId)!;
-    expect(edge.sourceType).toBe('anchor');
-    expect(edge.targetType).toBe('fact');
+    expect(edge.sourceType).toBe('hub');
+    expect(edge.targetType).toBe('leaf');
     expect(edge.sourceId).toBe(anchor.id);
     expect(edge.targetId).toBe(fact.id);
   });
 
-  it('creates edge with sourceType=anchor and targetType=fact when creating new anchor', async () => {
+  it('creates edge with sourceType=hub and targetType=leaf when creating new anchor', async () => {
     const fact = createFact(db);
 
     llm.addResponse(JSON.stringify({
@@ -126,15 +126,15 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
 
     const edgeId = result.createdAnchors[0].edgeId;
     const edge = edgeRepo.getEdge(edgeId)!;
-    expect(edge.sourceType).toBe('anchor');
-    expect(edge.targetType).toBe('fact');
+    expect(edge.sourceType).toBe('hub');
+    expect(edge.targetType).toBe('leaf');
     expect(edge.targetId).toBe(fact.id);
     expect(edge.sourceId).toBe(result.createdAnchors[0].anchorId);
   });
 
   // ── 2. Correct edge_type ──────────────────────────────────────
 
-  it('uses anchor_to_fact edge_type for all anchor-fact connections', async () => {
+  it('uses about edge_type for all anchor-fact connections', async () => {
     const anchor = anchorRepo.createAnchor({
       label: 'TS',
       description: 'TypeScript',
@@ -149,12 +149,12 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
 
     const result = await linker.linkFact(fact, [makeCandidate(anchor.id, 'TS')]);
 
-    // Both connect and create produce anchor_to_fact edges
+    // Both connect and create produce 'about' edges
     const connectEdge = edgeRepo.getEdge(result.connectedEdges[0].edgeId)!;
     const createEdge = edgeRepo.getEdge(result.createdAnchors[0].edgeId)!;
 
-    expect(connectEdge.edgeType).toBe('anchor_to_fact');
-    expect(createEdge.edgeType).toBe('anchor_to_fact');
+    expect(connectEdge.edgeType).toBe('about');
+    expect(createEdge.edgeType).toBe('about');
   });
 
   // ── 3. LLM-specified weight is respected ──────────────────────
@@ -273,7 +273,7 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     expect(incoming[0].sourceId).toBe(anchor.id);
   });
 
-  it('edge is queryable by anchor_to_fact edge type filter', async () => {
+  it('edge is queryable by about edge type filter', async () => {
     const anchor = anchorRepo.createAnchor({
       label: 'TS',
       description: 'TypeScript',
@@ -289,9 +289,9 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     await linker.linkFact(fact, [makeCandidate(anchor.id, 'TS')]);
 
     const edges = edgeRepo.queryEdges({
-      edgeTypes: ['anchor_to_fact'],
-      sourceType: 'anchor',
-      targetType: 'fact',
+      edgeTypes: ['about'],
+      sourceType: 'hub',
+      targetType: 'leaf',
     });
     expect(edges).toHaveLength(1);
     expect(edges[0].sourceId).toBe(anchor.id);
@@ -339,9 +339,9 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     expect(edge.metadata).toEqual({ reason: 'introduces new concept' });
   });
 
-  // ── 7. Hebbian reinforcement on anchor_to_fact edges ──────────
+  // ── 7. Hebbian reinforcement on about edges ──────────
 
-  it('anchor_to_fact edges support Hebbian reinforcement', async () => {
+  it('about edges support Hebbian reinforcement', async () => {
     const anchor = anchorRepo.createAnchor({
       label: 'TS',
       description: 'TypeScript',
@@ -451,7 +451,7 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
 
   // ── 10. UNIQUE constraint prevents duplicate edges ────────────
 
-  it('prevents duplicate anchor_to_fact edge for same anchor-fact pair', async () => {
+  it('prevents duplicate about edge for same anchor-fact pair', async () => {
     const anchor = anchorRepo.createAnchor({
       label: 'TS',
       description: 'TypeScript',
@@ -484,7 +484,7 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     expect(edges).toHaveLength(1);
   });
 
-  // ── 11. findEdge works for anchor_to_fact ─────────────────────
+  // ── 11. findEdge works for about ─────────────────────
 
   it('findEdge locates edge by source-target-type triplet', async () => {
     const anchor = anchorRepo.createAnchor({
@@ -501,11 +501,11 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
 
     await linker.linkFact(fact, [makeCandidate(anchor.id, 'TS')]);
 
-    const found = edgeRepo.findEdge(anchor.id, fact.id, 'anchor_to_fact');
+    const found = edgeRepo.findEdge(anchor.id, fact.id, 'about');
     expect(found).not.toBeNull();
     expect(found!.weight).toBe(0.75);
-    expect(found!.sourceType).toBe('anchor');
-    expect(found!.targetType).toBe('fact');
+    expect(found!.sourceType).toBe('hub');
+    expect(found!.targetType).toBe('leaf');
   });
 
   // ── 12. Brain-like associative graph structure ────────────────
@@ -532,7 +532,7 @@ describe('AC 8: anchor–fact weighted_edge creation', () => {
     // Graph traversal: from anchor, find all connected facts
     const anchorEdges = edgeRepo.getOutgoingEdges(anchorId);
     expect(anchorEdges).toHaveLength(2);
-    expect(anchorEdges.every(e => e.edgeType === 'anchor_to_fact')).toBe(true);
+    expect(anchorEdges.every(e => e.edgeType === 'about')).toBe(true);
 
     // From fact2, find what anchors it's connected to → traverse to fact1
     const fact2Incoming = edgeRepo.getIncomingEdges(fact2.id);

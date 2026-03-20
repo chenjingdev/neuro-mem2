@@ -126,36 +126,23 @@ export interface BatchScoringResult {
 /**
  * Infer the WeightedEdgeType from source and target node types.
  *
- * Rules:
- * - anchor → fact   = 'anchor_to_fact'
- * - anchor → episode = 'anchor_to_episode'
- * - anchor → concept = 'anchor_to_concept'
- * - anchor → anchor  = 'anchor_to_anchor'
- * - fact → concept   = 'fact_supports_concept'
- * - episode → fact   = 'episode_contains_fact'
- * - episode → concept = 'episode_mentions_concept'
- * - concept → concept = 'concept_related_to'
- * - otherwise        = 'derived_from' (generic)
+ * Rules (hub/leaf model):
+ * - hub → leaf  = 'about'   (anchor describes a memory node)
+ * - hub → hub   = 'related' (inter-anchor association)
+ * - leaf → leaf = 'related' (memory node association)
+ * - leaf → hub  = 'about'   (memory node references an anchor)
  */
 export function inferEdgeType(
   sourceType: WeightedNodeType,
   targetType: WeightedNodeType,
 ): WeightedEdgeType {
-  if (sourceType === 'anchor') {
-    switch (targetType) {
-      case 'fact': return 'anchor_to_fact';
-      case 'episode': return 'anchor_to_episode';
-      case 'concept': return 'anchor_to_concept';
-      case 'anchor': return 'anchor_to_anchor';
-    }
-  }
+  if (sourceType === 'hub' && targetType === 'leaf') return 'about';
+  if (sourceType === 'hub' && targetType === 'hub') return 'related';
+  if (sourceType === 'leaf' && targetType === 'leaf') return 'related';
+  if (sourceType === 'leaf' && targetType === 'hub') return 'about';
 
-  if (sourceType === 'fact' && targetType === 'concept') return 'fact_supports_concept';
-  if (sourceType === 'episode' && targetType === 'fact') return 'episode_contains_fact';
-  if (sourceType === 'episode' && targetType === 'concept') return 'episode_mentions_concept';
-  if (sourceType === 'concept' && targetType === 'concept') return 'concept_related_to';
-
-  return 'derived_from';
+  // Fallback (shouldn't be reached with hub/leaf types)
+  return 'related';
 }
 
 // ────────────────────────────────────────────────────────

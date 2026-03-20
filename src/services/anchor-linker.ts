@@ -397,10 +397,10 @@ export class AnchorLinker {
 
         const edge = this.edgeRepo.createEdge({
           sourceId: conn.anchorId,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: conn.weight,
           metadata: conn.reason ? { reason: conn.reason } : undefined,
         });
@@ -431,10 +431,10 @@ export class AnchorLinker {
           const edgeWeight = create.weight ?? this.config.defaultEdgeWeight;
           const edge = this.edgeRepo.createEdge({
             sourceId: existing.id,
-            sourceType: 'anchor',
+            sourceType: 'hub',
             targetId: fact.id,
-            targetType: 'fact',
-            edgeType: 'anchor_to_fact',
+            targetType: 'leaf',
+            edgeType: 'about',
             weight: edgeWeight,
             metadata: create.reason
               ? { reason: create.reason, note: 'connected to existing (duplicate label)' }
@@ -485,10 +485,10 @@ export class AnchorLinker {
         const edgeWeight = create.weight ?? this.config.defaultEdgeWeight;
         const edge = this.edgeRepo.createEdge({
           sourceId: anchor.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: fact.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: edgeWeight,
           metadata: create.reason ? { reason: create.reason } : undefined,
         });

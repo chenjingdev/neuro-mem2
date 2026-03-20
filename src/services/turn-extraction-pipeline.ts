@@ -20,16 +20,21 @@
 import type { EventBus, TurnCompletedEvent } from '../events/event-bus.js';
 import type { FactExtractor } from '../extraction/fact-extractor.js';
 import type { FactRepository } from '../db/fact-repo.js';
+import type { MemoryNodeRepository } from '../db/memory-node-repo.js';
 import type { ConversationRepository } from '../db/conversation-repo.js';
-import type { FactExtractionInput, CreateFactInput } from '../models/fact.js';
+import type { FactExtractionInput, CreateFactInput, Fact } from '../models/fact.js';
+import type { CreateMemoryNodeInput } from '../models/memory-node.js';
 
 export interface TurnExtractionPipelineOptions {
   /** Number of prior messages to include as context (default: 6) */
   contextWindowSize?: number;
+  /** Optional MemoryNodeRepository for dual-write to memory_nodes table */
+  memoryNodeRepo?: MemoryNodeRepository;
 }
 
 export class TurnExtractionPipeline {
   private readonly contextWindowSize: number;
+  private readonly memoryNodeRepo?: MemoryNodeRepository;
   private unsubscribe: (() => void) | null = null;
 
   constructor(
@@ -40,6 +45,7 @@ export class TurnExtractionPipeline {
     options: TurnExtractionPipelineOptions = {},
   ) {
     this.contextWindowSize = options.contextWindowSize ?? 6;
+    this.memoryNodeRepo = options.memoryNodeRepo;
   }
 
   /**
@@ -124,6 +130,11 @@ export class TurnExtractionPipeline {
 
         const savedFacts = this.factRepo.createMany(createInputs);
 
+        // Dual-write: sync facts to memory_nodes for the new retrieval layer
+        if (this.memoryNodeRepo) {
+          this.syncToMemoryNodes(savedFacts);
+        }
+
         // Emit success event
         await this.eventBus.emit({
           type: 'facts.extracted' as const,
@@ -169,6 +180,41 @@ export class TurnExtractionPipeline {
       }
     }
     return null;
+  }
+
+  /**
+   * Sync saved facts to memory_nodes table (dual-write).
+   */
+  private syncToMemoryNodes(facts: Fact[]): void {
+    const inputs: CreateMemoryNodeInput[] = facts.map(f => ({
+      nodeType: 'semantic' as const,
+      nodeRole: 'leaf' as const,
+      frontmatter: f.frontmatter ?? f.content,
+      keywords: [
+        ...(f.entities ?? []),
+        f.category,
+      ].filter(Boolean).join(' '),
+      metadata: {
+        entities: f.entities ?? [],
+        category: f.category,
+        confidence: f.confidence,
+        subject: f.subject ?? undefined,
+        predicate: f.predicate ?? undefined,
+        object: f.object ?? undefined,
+        content: f.content,
+        factId: f.id,
+      },
+      summary: f.summary ?? '',
+      sourceMessageIds: f.sourceMessageIds,
+      conversationId: f.conversationId,
+      sourceTurnIndex: f.sourceTurnIndex,
+    }));
+
+    try {
+      this.memoryNodeRepo!.createBatch(inputs);
+    } catch {
+      // Non-critical: facts are the source of truth
+    }
   }
 
   /**

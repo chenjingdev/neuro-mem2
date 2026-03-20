@@ -315,21 +315,21 @@ describe('Memory Node Router — Layer Loading API', () => {
       const leaf1 = nodeRepo.create(makeSemantic({ frontmatter: 'Leaf 1' }));
       const leaf2 = nodeRepo.create(makeSemantic({ frontmatter: 'Leaf 2' }));
 
-      // Create edges (using anchor type for compatibility with existing schema)
+      // Create edges
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf1.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 5.0,
       });
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf2.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 3.0,
       });
 
@@ -342,7 +342,7 @@ describe('Memory Node Router — Layer Loading API', () => {
       const child = body.children[0];
       expect(child.node.id).toBeDefined();
       expect(child.node.frontmatter).toBeDefined();
-      expect(child.edge.edgeType).toBe('anchor_to_fact');
+      expect(child.edge.edgeType).toBe('about');
       expect(child.edge.direction).toBe('outgoing');
       expect(typeof child.edge.weight).toBe('number');
     });
@@ -353,10 +353,10 @@ describe('Memory Node Router — Layer Loading API', () => {
 
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 5.0,
       });
 
@@ -372,10 +372,10 @@ describe('Memory Node Router — Layer Loading API', () => {
 
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 5.0,
       });
 
@@ -390,10 +390,10 @@ describe('Memory Node Router — Layer Loading API', () => {
       // Leaf -> Hub (incoming to hub)
       edgeRepo.createEdge({
         sourceId: leaf.id,
-        sourceType: 'fact',
+        sourceType: 'leaf',
         targetId: hub.id,
-        targetType: 'anchor',
-        edgeType: 'fact_supports_concept',
+        targetType: 'hub',
+        edgeType: 'about',
         weight: 2.0,
       });
 
@@ -409,18 +409,18 @@ describe('Memory Node Router — Layer Loading API', () => {
 
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf1.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 10.0,
       });
       edgeRepo.createEdge({
         sourceId: hub.id,
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: leaf2.id,
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 1.0,
       });
 
@@ -439,10 +439,10 @@ describe('Memory Node Router — Layer Loading API', () => {
       for (const leaf of leaves) {
         edgeRepo.createEdge({
           sourceId: hub.id,
-          sourceType: 'anchor',
+          sourceType: 'hub',
           targetId: leaf.id,
-          targetType: 'fact',
-          edgeType: 'anchor_to_fact',
+          targetType: 'leaf',
+          edgeType: 'about',
           weight: 5.0,
         });
       }

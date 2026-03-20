@@ -266,9 +266,9 @@ describe('REST API Router', () => {
 
       expect(res.status).toBe(201);
       const body = await res.json() as Record<string, unknown>;
-      expect(body.messageId).toBeDefined();
       expect(body.conversationId).toBe(conversationId);
       expect(body.turnIndex).toBe(1);
+      expect(body.createdAt).toBeDefined();
     });
 
     it('returns 404 for non-existent conversation', async () => {

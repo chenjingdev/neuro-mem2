@@ -631,7 +631,7 @@ export class UnifiedRetriever {
       const edges = this.db.prepare(`
         SELECT id, target_id, weight
         FROM weighted_edges
-        WHERE source_id = ? AND source_type = 'anchor'
+        WHERE source_id = ? AND source_type = 'hub'
       `).all(anchorId) as Array<{ id: string; target_id: string; weight: number }>;
 
       for (const edge of edges) {

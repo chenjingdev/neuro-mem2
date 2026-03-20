@@ -73,7 +73,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
           description: 'The user decided to migrate the JavaScript project to TypeScript with strict mode.',
           startTurnIndex: 0,
           endTurnIndex: 1,
-          sourceMessageIds: [conv.messages[0]!.id, conv.messages[1]!.id],
+          sourceMessageIds: [`${conv.id}:0`, `${conv.id}:1`],
           actors: ['user', 'assistant'],
           outcome: 'Migration plan initiated',
           createdAt: now,
@@ -86,7 +86,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
           description: 'Set up tsconfig.json with strict mode and JSX support for React + Webpack project.',
           startTurnIndex: 2,
           endTurnIndex: 3,
-          sourceMessageIds: [conv.messages[2]!.id, conv.messages[3]!.id],
+          sourceMessageIds: [`${conv.id}:2`, `${conv.id}:3`],
           actors: ['assistant'],
           createdAt: now,
         },
@@ -98,7 +98,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
           description: 'Began TypeScript migration with utility files as the first target.',
           startTurnIndex: 4,
           endTurnIndex: 5,
-          sourceMessageIds: [conv.messages[4]!.id, conv.messages[5]!.id],
+          sourceMessageIds: [`${conv.id}:4`, `${conv.id}:5`],
           actors: ['user', 'assistant'],
           outcome: 'Utility files queued for conversion',
           createdAt: now,
@@ -125,7 +125,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
         description: 'The team decided to enable strict mode in TypeScript configuration.',
         startTurnIndex: 4,
         endTurnIndex: 5,
-        sourceMessageIds: [conv.messages[4]!.id, conv.messages[5]!.id],
+        sourceMessageIds: [`${conv.id}:4`, `${conv.id}:5`],
         actors: ['user', 'assistant'],
         outcome: 'strict mode enabled',
         createdAt: now,
@@ -143,7 +143,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
       expect(fetched!.description).toBe('The team decided to enable strict mode in TypeScript configuration.');
       expect(fetched!.startTurnIndex).toBe(4);
       expect(fetched!.endTurnIndex).toBe(5);
-      expect(fetched!.sourceMessageIds).toEqual([conv.messages[4]!.id, conv.messages[5]!.id]);
+      expect(fetched!.sourceMessageIds).toEqual([`${conv.id}:4`, `${conv.id}:5`]);
       expect(fetched!.actors).toEqual(['user', 'assistant']);
       expect(fetched!.outcome).toBe('strict mode enabled');
       expect(fetched!.metadata).toEqual({ extractionModel: 'claude-3', confidence: 0.92 });
@@ -754,7 +754,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
           title: 'Decided to migrate to TypeScript',
           description: 'User initiated migration from JS to TS.',
           startTurnIndex: 0, endTurnIndex: 1,
-          sourceMessageIds: [conv.messages[0]!.id, conv.messages[1]!.id],
+          sourceMessageIds: [`${conv.id}:0`, `${conv.id}:1`],
           actors: ['user', 'assistant'], createdAt: now,
         },
         {
@@ -762,7 +762,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
           title: 'Configured TypeScript with React',
           description: 'Set up tsconfig.json with React + Webpack settings.',
           startTurnIndex: 2, endTurnIndex: 5,
-          sourceMessageIds: conv.messages.slice(2).map(m => m.id),
+          sourceMessageIds: conv.messages.slice(2).map((_, i) => `${conv.id}:${i + 2}`),
           actors: ['assistant', 'user'], outcome: 'Config ready',
           createdAt: now,
         },
@@ -844,7 +844,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
         description: 'desc',
         startTurnIndex: 0,
         endTurnIndex: 3,
-        sourceMessageIds: conv.messages.slice(0, 4).map(m => m.id),
+        sourceMessageIds: conv.messages.slice(0, 4).map((_, i) => `${conv.id}:${i}`),
         actors: ['user', 'assistant'],
         createdAt: now,
       };
@@ -853,8 +853,9 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
 
       // Verify source messages still exist and are immutable
       const stored = episodeRepo.getEpisode(episode.id);
-      for (const msgId of stored!.sourceMessageIds) {
-        const msg = convRepo.getMessage(msgId);
+      for (const sourceRef of stored!.sourceMessageIds) {
+        const [convId, turnStr] = sourceRef.split(':');
+        const msg = convRepo.getMessage(convId!, Number(turnStr));
         expect(msg).not.toBeNull();
       }
 
@@ -1002,7 +1003,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
         id: uuidv4(), conversationId: conv.id, type: 'decision',
         title: 'Decision', description: 'desc',
         startTurnIndex: 0, endTurnIndex: 5,
-        sourceMessageIds: conv.messages.map(m => m.id),
+        sourceMessageIds: conv.messages.map((_, i) => `${conv.id}:${i}`),
         actors: ['user', 'assistant'], createdAt: now,
       }]);
 
@@ -1032,7 +1033,7 @@ describe('Graph Storage: Episode & Concept Nodes', () => {
         description: `A ${type} occurred`,
         startTurnIndex: i,
         endTurnIndex: i,
-        sourceMessageIds: [conv.messages[i]!.id],
+        sourceMessageIds: [`${conv.id}:${i}`],
         actors: ['user'],
         createdAt: now,
       }));

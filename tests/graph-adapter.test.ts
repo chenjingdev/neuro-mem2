@@ -109,7 +109,7 @@ describe('GraphAdapter', () => {
         { type: 'procedural', color: '#00b894' },
         { type: 'prospective', color: '#fdcb6e' },
         { type: 'emotional', color: '#e84393' },
-        { type: null, color: '#95a5a6' }, // null type
+        { type: null, color: '#8b8b9e' }, // null type (from NODE_TYPE_PALETTES.null.base)
       ];
 
       for (const { type, color } of types) {

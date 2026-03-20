@@ -23,7 +23,7 @@ function createTestDb(): Database.Database {
 
 function makeFactInput(overrides?: Partial<CreateMemoryNodeInput>): CreateMemoryNodeInput {
   return {
-    nodeType: 'fact',
+    nodeType: 'semantic',
     nodeRole: 'leaf',
     frontmatter: '사용자는 React를 선호함',
     keywords: 'React 선호 프레임워크 preference',
@@ -46,7 +46,7 @@ function makeFactInput(overrides?: Partial<CreateMemoryNodeInput>): CreateMemory
 
 function makeHubInput(overrides?: Partial<CreateMemoryNodeInput>): CreateMemoryNodeInput {
   return {
-    nodeType: 'concept',
+    nodeType: 'semantic',
     nodeRole: 'hub',
     frontmatter: 'React',
     keywords: 'React 리액트 frontend UI library',
@@ -146,12 +146,12 @@ describe('MemoryNodeRepository', () => {
 
       // Classification
       expect(node.id).toBeTruthy();
-      expect(node.nodeType).toBe('fact');
+      expect(node.nodeType).toBe('semantic');
       expect(node.nodeRole).toBe('leaf');
 
       // L0
       expect(node.frontmatter).toBe('사용자는 React를 선호함');
-      expect(node.keywords).toBe('React 선호 프레임워크 preference');
+      expect(node.keywords).toBe('preference react 선호 프레임워크');
 
       // L1
       expect(node.metadata.entities).toEqual(['React']);
@@ -178,7 +178,7 @@ describe('MemoryNodeRepository', () => {
     it('creates a hub node', () => {
       const node = repo.create(makeHubInput());
 
-      expect(node.nodeType).toBe('concept');
+      expect(node.nodeType).toBe('semantic');
       expect(node.nodeRole).toBe('hub');
       expect(node.frontmatter).toBe('React');
       expect(node.metadata.hubType).toBe('topic');
@@ -275,7 +275,7 @@ describe('MemoryNodeRepository', () => {
       });
 
       expect(updated!.frontmatter).toBe('사용자는 Vue.js를 선호함');
-      expect(updated!.keywords).toBe('Vue.js 선호 프레임워크');
+      expect(updated!.keywords).toBe('vue.js 선호 프레임워크');
     });
 
     it('merges metadata (L1)', () => {
@@ -396,14 +396,14 @@ describe('MemoryNodeRepository', () => {
     });
 
     it('ftsSearchFiltered filters by node type', () => {
-      repo.create(makeFactInput({ nodeType: 'fact', frontmatter: 'fact about React' }));
-      repo.create(makeHubInput({ nodeType: 'concept', frontmatter: 'React concept' }));
+      repo.create(makeFactInput({ nodeType: 'semantic', frontmatter: 'semantic about React' }));
+      repo.create(makeHubInput({ nodeType: 'episodic', frontmatter: 'React episodic' }));
 
-      const facts = repo.ftsSearchFiltered('React', { nodeType: 'fact' });
-      expect(facts).toHaveLength(1);
+      const semantics = repo.ftsSearchFiltered('React', { nodeType: 'semantic' });
+      expect(semantics).toHaveLength(1);
 
-      const concepts = repo.ftsSearchFiltered('React', { nodeType: 'concept' });
-      expect(concepts).toHaveLength(1);
+      const episodics = repo.ftsSearchFiltered('React', { nodeType: 'episodic' });
+      expect(episodics).toHaveLength(1);
     });
 
     it('returns empty for empty query', () => {
@@ -449,11 +449,11 @@ describe('MemoryNodeRepository', () => {
   describe('query', () => {
     it('filters by nodeType', () => {
       repo.create(makeFactInput());
-      repo.create(makeHubInput());
+      repo.create(makeHubInput({ nodeType: 'episodic' }));
 
-      const facts = repo.query({ nodeType: 'fact' });
-      expect(facts).toHaveLength(1);
-      expect(facts[0].nodeType).toBe('fact');
+      const semantics = repo.query({ nodeType: 'semantic' });
+      expect(semantics).toHaveLength(1);
+      expect(semantics[0].nodeType).toBe('semantic');
     });
 
     it('filters by nodeRole', () => {
@@ -501,11 +501,11 @@ describe('MemoryNodeRepository', () => {
     it('count returns correct counts', () => {
       repo.create(makeFactInput());
       repo.create(makeFactInput());
-      repo.create(makeHubInput());
+      repo.create(makeHubInput({ nodeType: 'episodic' }));
 
       expect(repo.count()).toBe(3);
-      expect(repo.count('fact')).toBe(2);
-      expect(repo.count('concept')).toBe(1);
+      expect(repo.count('semantic')).toBe(2);
+      expect(repo.count('episodic')).toBe(1);
       expect(repo.count(undefined, 'hub')).toBe(1);
       expect(repo.count(undefined, 'leaf')).toBe(2);
     });
@@ -584,14 +584,14 @@ describe('MemoryNodeRepository', () => {
     });
 
     it('allows all valid node types', () => {
-      for (const nt of ['fact', 'episode', 'concept', 'schema', 'identity'] as const) {
+      for (const nt of ['semantic', 'episodic', 'procedural', 'prospective', 'emotional'] as const) {
         const node = repo.create(makeFactInput({ nodeType: nt, frontmatter: `type-${nt}` }));
         expect(node.nodeType).toBe(nt);
       }
     });
 
     it('allows all valid node roles', () => {
-      for (const nr of ['leaf', 'hub', 'index'] as const) {
+      for (const nr of ['leaf', 'hub'] as const) {
         const node = repo.create(makeFactInput({ nodeRole: nr, frontmatter: `role-${nr}` }));
         expect(node.nodeRole).toBe(nr);
       }

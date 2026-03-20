@@ -98,11 +98,9 @@ describe('BFSExpander', () => {
   ) {
     // Determine edge_type based on source→target type combination
     const edgeType =
-      sourceType === 'anchor' && targetType === 'fact' ? 'anchor_to_fact' :
-      sourceType === 'anchor' && targetType === 'anchor' ? 'anchor_to_anchor' :
-      sourceType === 'anchor' && targetType === 'episode' ? 'anchor_to_episode' :
-      sourceType === 'anchor' && targetType === 'concept' ? 'anchor_to_concept' :
-      'derived_from';
+      sourceType === 'hub' && targetType === 'leaf' ? 'about' :
+      sourceType === 'hub' && targetType === 'hub' ? 'related' :
+      'about';
     return edgeRepo.createEdge({
       sourceId,
       sourceType: sourceType as any,
@@ -140,8 +138,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('TypeScript supports generics');
       const fact2 = createFact('TypeScript compiles to JavaScript');
 
-      createEdge(anchor.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor.id, 'anchor', fact2.id, 'fact', 0.6);
+      createEdge(anchor.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor.id, 'hub', fact2.id, 'leaf', 0.6);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(
@@ -162,8 +160,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('Low weight fact');
       const fact2 = createFact('High weight fact');
 
-      createEdge(anchor.id, 'anchor', fact1.id, 'fact', 0.3);
-      createEdge(anchor.id, 'anchor', fact2.id, 'fact', 0.9);
+      createEdge(anchor.id, 'hub', fact1.id, 'leaf', 0.3);
+      createEdge(anchor.id, 'hub', fact2.id, 'leaf', 0.9);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(
@@ -187,9 +185,9 @@ describe('BFSExpander', () => {
       const fact1 = createFact('TypeScript types');
       const fact2 = createFact('JavaScript runtime');
 
-      createEdge(anchor1.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor1.id, 'anchor', anchor2.id, 'anchor', 0.7);
-      createEdge(anchor2.id, 'anchor', fact2.id, 'fact', 0.6);
+      createEdge(anchor1.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor1.id, 'hub', anchor2.id, 'hub', 0.7);
+      createEdge(anchor2.id, 'hub', fact2.id, 'leaf', 0.6);
 
       const expander = new BFSExpander(db, { maxDepth: 3 });
       const result = await expander.expand(
@@ -212,8 +210,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('Already found fact');
       const fact2 = createFact('New fact from BFS');
 
-      createEdge(anchor.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor.id, 'anchor', fact2.id, 'fact', 0.6);
+      createEdge(anchor.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor.id, 'hub', fact2.id, 'leaf', 0.6);
 
       const existingItems = [makeScoredItem(fact1.id, 'fact', 0.5)];
 
@@ -233,7 +231,7 @@ describe('BFSExpander', () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('A fact');
 
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(
@@ -254,7 +252,7 @@ describe('BFSExpander', () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('A fact');
 
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const anchorSim = 0.9;
       const scoreMultiplier = 0.8;
@@ -283,8 +281,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('Strong connection');
       const fact2 = createFact('Weak connection');
 
-      createEdge(anchor.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor.id, 'anchor', fact2.id, 'fact', 0.05);
+      createEdge(anchor.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor.id, 'hub', fact2.id, 'leaf', 0.05);
 
       const expander = new BFSExpander(db, { minEdgeWeight: 0.1 });
       const result = await expander.expand(
@@ -306,9 +304,9 @@ describe('BFSExpander', () => {
       const fact1 = createFact('Direct fact');
       const fact2 = createFact('Indirect fact');
 
-      createEdge(anchor1.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor1.id, 'anchor', anchor2.id, 'anchor', 0.7);
-      createEdge(anchor2.id, 'anchor', fact2.id, 'fact', 0.6);
+      createEdge(anchor1.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor1.id, 'hub', anchor2.id, 'hub', 0.7);
+      createEdge(anchor2.id, 'hub', fact2.id, 'leaf', 0.6);
 
       const expander = new BFSExpander(db, { maxDepth: 1 });
       const result = await expander.expand(
@@ -357,8 +355,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('Fact 1');
       const fact2 = createFact('Fact 2');
 
-      createEdge(anchor.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor.id, 'anchor', fact2.id, 'fact', 0.6);
+      createEdge(anchor.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor.id, 'hub', fact2.id, 'leaf', 0.6);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(
@@ -381,7 +379,7 @@ describe('BFSExpander', () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('TypeScript generics');
 
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const embeddingProvider = new MockEmbeddingProvider(DIM);
       embeddingProvider.setEmbedding('TypeScript features', unitVector(DIM, 0));
@@ -404,7 +402,7 @@ describe('BFSExpander', () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('TypeScript generics are powerful');
 
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.7);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.7);
 
       const embeddingProvider = new MockEmbeddingProvider(DIM);
       embeddingProvider.setEmbedding('TypeScript features', unitVector(DIM, 0));
@@ -428,7 +426,7 @@ describe('BFSExpander', () => {
     it('BFS expansion can be disabled via config', async () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('TypeScript fact');
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const embeddingProvider = new MockEmbeddingProvider(DIM);
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -450,7 +448,7 @@ describe('BFSExpander', () => {
     it('trace hook receives bfs_expansion events', async () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('A fact');
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const embeddingProvider = new MockEmbeddingProvider(DIM);
       embeddingProvider.setEmbedding('query', unitVector(DIM, 0));
@@ -481,7 +479,7 @@ describe('BFSExpander', () => {
     it('BFS items have source=graph and bfsExpanded=true', async () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('A fact');
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(
@@ -502,7 +500,7 @@ describe('BFSExpander', () => {
     it('BFS results match GraphTraverser behavior (weight accumulation)', async () => {
       const anchor = createAnchor('TS', 'TypeScript', unitVector(DIM, 0));
       const fact = createFact('TS fact');
-      createEdge(anchor.id, 'anchor', fact.id, 'fact', 0.8);
+      createEdge(anchor.id, 'hub', fact.id, 'leaf', 0.8);
 
       const expander = new BFSExpander(db, { scoreMultiplier: 1.0 });
       const result = await expander.expand(
@@ -525,8 +523,8 @@ describe('BFSExpander', () => {
       const fact1 = createFact('TypeScript types');
       const fact2 = createFact('JavaScript closures');
 
-      createEdge(anchor1.id, 'anchor', fact1.id, 'fact', 0.8);
-      createEdge(anchor2.id, 'anchor', fact2.id, 'fact', 0.7);
+      createEdge(anchor1.id, 'hub', fact1.id, 'leaf', 0.8);
+      createEdge(anchor2.id, 'hub', fact2.id, 'leaf', 0.7);
 
       const expander = new BFSExpander(db);
       const result = await expander.expand(

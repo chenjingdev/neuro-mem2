@@ -131,10 +131,10 @@ function createWeightedEdgeWithTimestamps(
   `).run(
     id,
     opts.sourceId,
-    'anchor',
+    'hub',
     opts.targetId,
-    opts.targetType,
-    `anchor_to_${opts.targetType}`,
+    'leaf',
+    'about',
     opts.weight,
     opts.weight,
     0.1,

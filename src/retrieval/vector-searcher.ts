@@ -28,6 +28,10 @@ import {
   type AnchorDecayConfig,
   DEFAULT_DECAY_CONFIG,
 } from '../scoring/anchor-decay.js';
+import {
+  cosineSimilarity as cosineSimilarityVec,
+  bufferToFloat32Array,
+} from './cosine-similarity.js';
 
 // ─── Configuration ───────────────────────────────────────────────
 
@@ -396,8 +400,8 @@ export class VectorSearcher {
       SELECT id, target_id, target_type, edge_type, weight,
         decay_rate, activation_count, last_activated_at, created_at
       FROM weighted_edges
-      WHERE source_id = ? AND source_type = 'anchor'
-        AND target_type IN ('fact', 'episode', 'concept')
+      WHERE source_id = ? AND source_type = 'hub'
+        AND target_type = 'leaf'
       ORDER BY weight DESC
     `).all(anchorId) as EdgeRow[];
 
@@ -424,16 +428,16 @@ export class VectorSearcher {
       // Propagate score: anchor similarity * effective edge weight
       const score = round4(anchorSimilarity * effectiveEdgeWeight);
 
-      // Load the content of the target node
-      const content = this.loadNodeContent(row.target_id, row.target_type);
-      if (!content) continue;
+      // Load the content of the target node and resolve its app-level nodeType
+      const resolved = this.loadNodeContent(row.target_id);
+      if (!resolved) continue;
 
       items.push({
         nodeId: row.target_id,
-        nodeType: row.target_type as ScoredMemoryItem['nodeType'],
+        nodeType: resolved.nodeType,
         score,
         source: 'vector',
-        content,
+        content: resolved.content,
         retrievalMetadata: {
           expandedFromAnchor: anchorId,
           edgeType: row.edge_type,
@@ -450,31 +454,30 @@ export class VectorSearcher {
   }
 
   /**
-   * Load the textual content of a memory node by type and ID.
+   * Load the textual content of a memory node by trying each entity table.
+   * DB stores 'leaf' as target_type; we resolve to the app-level nodeType
+   * ('fact'/'episode'/'concept') by checking which table has the row.
    */
-  private loadNodeContent(nodeId: string, nodeType: string): string | null {
-    switch (nodeType) {
-      case 'fact': {
-        const row = this.db.prepare(
-          'SELECT content FROM facts WHERE id = ?',
-        ).get(nodeId) as { content: string } | undefined;
-        return row?.content ?? null;
-      }
-      case 'episode': {
-        const row = this.db.prepare(
-          'SELECT title, description FROM episodes WHERE id = ?',
-        ).get(nodeId) as { title: string; description: string } | undefined;
-        return row ? `[${row.title}] ${row.description}` : null;
-      }
-      case 'concept': {
-        const row = this.db.prepare(
-          'SELECT name, description FROM concepts WHERE id = ?',
-        ).get(nodeId) as { name: string; description: string } | undefined;
-        return row ? `[${row.name}] ${row.description}` : null;
-      }
-      default:
-        return null;
-    }
+  private loadNodeContent(nodeId: string): { content: string; nodeType: ScoredMemoryItem['nodeType'] } | null {
+    // Try facts first (most common)
+    const fact = this.db.prepare(
+      'SELECT content FROM facts WHERE id = ?',
+    ).get(nodeId) as { content: string } | undefined;
+    if (fact) return { content: fact.content, nodeType: 'fact' };
+
+    // Try episodes
+    const episode = this.db.prepare(
+      'SELECT title, description FROM episodes WHERE id = ?',
+    ).get(nodeId) as { title: string; description: string } | undefined;
+    if (episode) return { content: `[${episode.title}] ${episode.description}`, nodeType: 'episode' };
+
+    // Try concepts
+    const concept = this.db.prepare(
+      'SELECT name, description FROM concepts WHERE id = ?',
+    ).get(nodeId) as { name: string; description: string } | undefined;
+    if (concept) return { content: `[${concept.name}] ${concept.description}`, nodeType: 'concept' };
+
+    return null;
   }
 
   // ─── Internal: Deduplication ───────────────────────────────────

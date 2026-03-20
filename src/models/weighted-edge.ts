@@ -53,7 +53,7 @@ export type WeightedNodeType = 'hub' | 'leaf';
  * Relationship types for weighted edges in the MemoryNode graph.
  *
  * These 6 semantic edge types replace the old entity-specific types
- * (episode_mentions_concept, anchor_to_fact, etc.) with universal
+ * (the old entity-specific types) with universal
  * relationship semantics applicable to any MemoryNode pair:
  *
  * - about:       Node A is about/describes Node B (topic association)

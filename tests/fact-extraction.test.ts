@@ -12,12 +12,10 @@ function makeInput(overrides?: Partial<FactExtractionInput>): FactExtractionInpu
   return {
     conversationId: 'conv-1',
     userMessage: {
-      id: 'msg-u1',
       content: 'I prefer TypeScript for backend work and use PostgreSQL for production databases.',
       turnIndex: 0,
     },
     assistantMessage: {
-      id: 'msg-a1',
       content: 'Great choices! TypeScript provides strong typing for backend development, and PostgreSQL is excellent for production workloads.',
       turnIndex: 1,
     },
@@ -305,7 +303,7 @@ describe('Fact Extractor', () => {
 
     // Verify conversation and source linkage
     expect(result.facts[0]!.conversationId).toBe('conv-1');
-    expect(result.facts[0]!.sourceMessageIds).toEqual(['msg-u1', 'msg-a1']);
+    expect(result.facts[0]!.sourceMessageIds).toEqual(['conv-1:0', 'conv-1:1']);
 
     // Verify metadata
     expect(result.facts[0]!.metadata?.extractionModel).toBe('mock');
@@ -327,8 +325,8 @@ describe('Fact Extractor', () => {
 
   it('should return empty facts for empty messages', async () => {
     const input = makeInput({
-      userMessage: { id: 'u', content: '  ', turnIndex: 0 },
-      assistantMessage: { id: 'a', content: 'response', turnIndex: 1 },
+      userMessage: { content: '  ', turnIndex: 0 },
+      assistantMessage: { content: 'response', turnIndex: 1 },
     });
 
     const result = await extractor.extractFromTurn(input);
@@ -379,8 +377,8 @@ describe('Fact Extractor', () => {
       makeInput({ conversationId: 'c1' }),
       makeInput({
         conversationId: 'c1',
-        userMessage: { id: 'msg-u2', content: 'We should use React for the frontend', turnIndex: 2 },
-        assistantMessage: { id: 'msg-a2', content: 'React is a great choice for interactive UIs.', turnIndex: 3 },
+        userMessage: { content: 'We should use React for the frontend', turnIndex: 2 },
+        assistantMessage: { content: 'React is a great choice for interactive UIs.', turnIndex: 3 },
       }),
     ];
 

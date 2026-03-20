@@ -244,10 +244,10 @@ describe('GraphPersistence', () => {
     it('creates a new weighted edge if none exists', () => {
       const edge = gp.ensureWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.7,
       });
 
@@ -260,19 +260,19 @@ describe('GraphPersistence', () => {
     it('returns existing edge without modification', () => {
       const first = gp.ensureWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.7,
       });
 
       const second = gp.ensureWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.9, // Different weight — should be ignored
       });
 
@@ -286,10 +286,10 @@ describe('GraphPersistence', () => {
     it('creates new edge and returns isNew=true', () => {
       const { edge, isNew, reinforcement } = gp.upsertWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.6,
       });
 
@@ -302,20 +302,20 @@ describe('GraphPersistence', () => {
       // Create first
       gp.upsertWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.5,
       });
 
       // Upsert again — should reinforce
       const { edge, isNew, reinforcement } = gp.upsertWeightedEdge({
         sourceId: 'anchor-1',
-        sourceType: 'anchor',
+        sourceType: 'hub',
         targetId: 'fact-1',
-        targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        targetType: 'leaf',
+        edgeType: 'about',
       });
 
       expect(isNew).toBe(false);
@@ -328,15 +328,15 @@ describe('GraphPersistence', () => {
 
     it('respects custom learning rate on reinforcement', () => {
       gp.upsertWeightedEdge({
-        sourceId: 'a', sourceType: 'anchor',
-        targetId: 'f', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: 'a', sourceType: 'hub',
+        targetId: 'f', targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
 
       const { reinforcement } = gp.upsertWeightedEdge({
-        sourceId: 'a', sourceType: 'anchor',
-        targetId: 'f', targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'a', sourceType: 'hub',
+        targetId: 'f', targetType: 'leaf',
+        edgeType: 'about',
         learningRate: 0.5,
       });
 
@@ -348,9 +348,9 @@ describe('GraphPersistence', () => {
   describe('upsertWeightedEdges (batch)', () => {
     it('batch upserts multiple weighted edges', () => {
       const inputs: PersistWeightedInput[] = [
-        { sourceId: 'a1', sourceType: 'anchor', targetId: 'f1', targetType: 'fact', edgeType: 'anchor_to_fact', weight: 0.6 },
-        { sourceId: 'a1', sourceType: 'anchor', targetId: 'f2', targetType: 'fact', edgeType: 'anchor_to_fact', weight: 0.8 },
-        { sourceId: 'a1', sourceType: 'anchor', targetId: 'e1', targetType: 'episode', edgeType: 'anchor_to_episode', weight: 0.4 },
+        { sourceId: 'a1', sourceType: 'hub', targetId: 'f1', targetType: 'leaf', edgeType: 'about', weight: 0.6 },
+        { sourceId: 'a1', sourceType: 'hub', targetId: 'f2', targetType: 'leaf', edgeType: 'about', weight: 0.8 },
+        { sourceId: 'a1', sourceType: 'hub', targetId: 'e1', targetType: 'leaf', edgeType: 'about', weight: 0.4 },
       ];
 
       const results = gp.upsertWeightedEdges(inputs);
@@ -365,14 +365,14 @@ describe('GraphPersistence', () => {
   describe('reinforceCoActivation', () => {
     it('reinforces multiple edges in a co-activation batch', () => {
       const e1 = gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
       const e2 = gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.3,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f2', targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
 
       const result = gp.reinforceCoActivation([e1.id, e2.id]);
@@ -396,9 +396,9 @@ describe('GraphPersistence', () => {
 
     it('skips non-existent edge IDs gracefully', () => {
       const e1 = gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
 
       const result = gp.reinforceCoActivation([e1.id, 'non-existent']);
@@ -410,19 +410,19 @@ describe('GraphPersistence', () => {
   describe('reinforceNodeEdges', () => {
     it('reinforces all edges connected to a node', () => {
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'f2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.3,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'f2', targetType: 'leaf',
+        edgeType: 'about', weight: 0.3,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'other', sourceType: 'anchor',
-        targetId: 'anchor-1', targetType: 'anchor',
-        edgeType: 'anchor_to_anchor', weight: 0.7,
+        sourceId: 'other', sourceType: 'hub',
+        targetId: 'anchor-1', targetType: 'hub',
+        edgeType: 'related', weight: 0.7,
       });
 
       const result = gp.reinforceNodeEdges('anchor-1');
@@ -436,9 +436,9 @@ describe('GraphPersistence', () => {
     it('applies decay to weighted edges using advanced per-edge computation', () => {
       // Create a weighted edge with old activation time
       const e = gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about',
         weight: 0.8,
         decayRate: 0.01,
       });
@@ -490,9 +490,9 @@ describe('GraphPersistence', () => {
 
     it('applies decay to both tables by default', () => {
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
       gp.edgeRepo.createEdge({
         sourceId: 'f1', sourceType: 'fact',
@@ -513,24 +513,24 @@ describe('GraphPersistence', () => {
   describe('getWeightedNeighbors', () => {
     beforeEach(() => {
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'fact-1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.9,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'fact-1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.9,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'fact-2', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.5,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'fact-2', targetType: 'leaf',
+        edgeType: 'about', weight: 0.5,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'ep-1', targetType: 'episode',
-        edgeType: 'anchor_to_episode', weight: 0.7,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'ep-1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.7,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'other', sourceType: 'anchor',
-        targetId: 'anchor-1', targetType: 'anchor',
-        edgeType: 'anchor_to_anchor', weight: 0.6,
+        sourceId: 'other', sourceType: 'hub',
+        targetId: 'anchor-1', targetType: 'hub',
+        edgeType: 'related', weight: 0.6,
       });
     });
 
@@ -548,10 +548,10 @@ describe('GraphPersistence', () => {
 
     it('filters by edge types', () => {
       const neighbors = gp.getWeightedNeighbors('anchor-1', {
-        edgeTypes: ['anchor_to_fact'],
+        edgeTypes: ['about'],
       });
-      expect(neighbors.length).toBe(2);
-      expect(neighbors.every(n => n.nodeType === 'fact')).toBe(true);
+      expect(neighbors.length).toBe(3);
+      expect(neighbors.every(n => n.nodeType === 'leaf')).toBe(true);
     });
 
     it('limits results', () => {
@@ -592,9 +592,9 @@ describe('GraphPersistence', () => {
         edgeType: 'fact_supports_concept', weight: 0.6,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'f1', sourceType: 'fact',
-        targetId: 'c1', targetType: 'concept',
-        edgeType: 'fact_supports_concept', weight: 0.8,
+        sourceId: 'f1', sourceType: 'leaf',
+        targetId: 'c1', targetType: 'leaf',
+        edgeType: 'refines', weight: 0.8,
       });
 
       const rel = gp.getRelationship('f1', 'c1');
@@ -617,9 +617,9 @@ describe('GraphPersistence', () => {
         edgeType: 'fact_supports_concept', weight: 0.6,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'node-1', sourceType: 'fact',
-        targetId: 'concept-1', targetType: 'concept',
-        edgeType: 'fact_supports_concept', weight: 0.9,
+        sourceId: 'node-1', sourceType: 'leaf',
+        targetId: 'concept-1', targetType: 'leaf',
+        edgeType: 'refines', weight: 0.9,
       });
       gp.edgeRepo.createEdge({
         sourceId: 'node-1', sourceType: 'fact',
@@ -638,9 +638,9 @@ describe('GraphPersistence', () => {
     it('respects limit', () => {
       for (let i = 0; i < 5; i++) {
         gp.weightedEdgeRepo.createEdge({
-          sourceId: 'hub', sourceType: 'anchor',
-          targetId: `fact-${i}`, targetType: 'fact',
-          edgeType: 'anchor_to_fact', weight: 0.5 + i * 0.1,
+          sourceId: 'hub', sourceType: 'hub',
+          targetId: `fact-${i}`, targetType: 'leaf',
+          edgeType: 'about', weight: 0.5 + i * 0.1,
         });
       }
 
@@ -662,9 +662,9 @@ describe('GraphPersistence', () => {
         edgeType: 'fact_supports_concept', weight: 0.5,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'anchor-1', sourceType: 'anchor',
-        targetId: 'node-x', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.7,
+        sourceId: 'anchor-1', sourceType: 'hub',
+        targetId: 'node-x', targetType: 'leaf',
+        edgeType: 'about', weight: 0.7,
       });
 
       const deleted = gp.deleteNodeEdges('node-x');
@@ -691,9 +691,9 @@ describe('GraphPersistence', () => {
         edgeType: 'fact_supports_concept', weight: 0.4,
       });
       gp.weightedEdgeRepo.createEdge({
-        sourceId: 'a1', sourceType: 'anchor',
-        targetId: 'f1', targetType: 'fact',
-        edgeType: 'anchor_to_fact', weight: 0.8,
+        sourceId: 'a1', sourceType: 'hub',
+        targetId: 'f1', targetType: 'leaf',
+        edgeType: 'about', weight: 0.8,
       });
 
       const stats = gp.getStats();
@@ -738,9 +738,9 @@ describe('GraphPersistence', () => {
 
       // 2. Create corresponding weighted edge for Hebbian tracking
       const { edge: we } = gp.upsertWeightedEdge({
-        sourceId: 'anchor-ts', sourceType: 'anchor',
-        targetId: 'fact-1', targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'anchor-ts', sourceType: 'hub',
+        targetId: 'fact-1', targetType: 'leaf',
+        edgeType: 'about',
         weight: initialWeight,
       });
       expect(we.weight).toBe(initialWeight);
@@ -791,9 +791,9 @@ describe('GraphPersistence', () => {
       const customGp = new GraphPersistence(db, { defaultLearningRate: 0.3 });
 
       const { edge } = customGp.upsertWeightedEdge({
-        sourceId: 'a', sourceType: 'anchor',
-        targetId: 'f', targetType: 'fact',
-        edgeType: 'anchor_to_fact',
+        sourceId: 'a', sourceType: 'hub',
+        targetId: 'f', targetType: 'leaf',
+        edgeType: 'about',
       });
 
       expect(edge.learningRate).toBe(0.3);

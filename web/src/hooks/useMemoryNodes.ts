@@ -158,6 +158,7 @@ export function useMemoryNodes(options?: UseMemoryNodesOptions): UseMemoryNodesR
       if (opts?.nodeType === null) params.set('nodeType', 'null');
       if (opts?.nodeRole) params.set('nodeRole', opts.nodeRole);
       if (opts?.orderBy) params.set('orderBy', opts.orderBy);
+      params.set('depth', '1');
 
       const res = await fetch(`${apiBase}/api/memory-nodes?${params}`, {
         signal: controller.signal,
@@ -180,7 +181,7 @@ export function useMemoryNodes(options?: UseMemoryNodesOptions): UseMemoryNodesR
 
   const fetchNodeDetail = useCallback(async (id: string): Promise<NodeDetailResponse | null> => {
     try {
-      const res = await fetch(`${apiBase}/api/memory-nodes/${id}`);
+      const res = await fetch(`${apiBase}/api/memory-nodes/${id}?depth=3`);
       if (!res.ok) {
         throw new Error(`Failed to fetch node: ${res.status}`);
       }
